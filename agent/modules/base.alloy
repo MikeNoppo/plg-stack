@@ -152,6 +152,8 @@ prometheus.exporter.unix "host" {
 	procfs_path = coalesce(sys.env("HOST_PROC"), "/proc")
 	sysfs_path  = coalesce(sys.env("HOST_SYS"), "/sys")
 	rootfs_path = coalesce(sys.env("HOST_ROOT"), "/")
+	// Disk names (by-id, LVM) come from the host's udev database.
+	udev_data_path = string.format("%s/run/udev/data", sys.env("HOST_ROOT"))
 
 	disable_collectors = ["btrfs", "infiniband", "ipvs", "xfs", "zfs"]
 
