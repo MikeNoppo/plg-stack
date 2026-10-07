@@ -1,0 +1,131 @@
+// Required by every server: shipping targets, host metrics, journald logs.
+// Settings come from the environment written by install.sh:
+//   MONITORING_URL, MONITORING_USER, MONITORING_PASSWORD, MONITORING_HOST, MONITORING_ENV
+//   HOST_PROC, HOST_SYS, HOST_ROOT (only when Alloy runs in a container)
+
+logging {
+	level  = "warn"
+	format = "logfmt"
+}
+
+prometheus.remote_write "default" {
+	endpoint {
+		url = string.format("%s/api/v1/write", sys.env("MONITORING_URL"))
+
+		basic_auth {
+			username = sys.env("MONITORING_USER")
+			password = sys.env("MONITORING_PASSWORD")
+		}
+	}
+
+	external_labels = {
+		host = sys.env("MONITORING_HOST"),
+		env  = sys.env("MONITORING_ENV"),
+	}
+}
+
+loki.write "default" {
+	endpoint {
+		url = string.format("%s/loki/api/v1/push", sys.env("MONITORING_URL"))
+
+		basic_auth {
+			username = sys.env("MONITORING_USER")
+			password = sys.env("MONITORING_PASSWORD")
+		}
+	}
+
+	external_labels = {
+		host = sys.env("MONITORING_HOST"),
+		env  = sys.env("MONITORING_ENV"),
+	}
+}
+
+prometheus.exporter.unix "host" {
+	procfs_path = coalesce(sys.env("HOST_PROC"), "/proc")
+	sysfs_path  = coalesce(sys.env("HOST_SYS"), "/sys")
+	rootfs_path = coalesce(sys.env("HOST_ROOT"), "/")
+
+	disable_collectors = ["btrfs", "infiniband", "ipvs", "xfs", "zfs"]
+
+	filesystem {
+		fs_types_exclude     = "^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fuse\\..*|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|ramfs|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tmpfs|tracefs)$"
+		mount_points_exclude = "^/(dev|proc|run|sys|snap|var/lib/docker|var/lib/containers|var/lib/kubelet)($|/)"
+	}
+
+	netdev {
+		device_exclude = "^(lo|veth.*|docker.*|br-.*|virbr.*|vxlan.*|cali.*|flannel.*)$"
+	}
+}
+
+discovery.relabel "host" {
+	targets = prometheus.exporter.unix.host.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "node"
+	}
+
+	rule {
+		target_label = "instance"
+		replacement  = sys.env("MONITORING_HOST")
+	}
+}
+
+prometheus.scrape "host" {
+	targets         = discovery.relabel.host.output
+	forward_to      = [prometheus.remote_write.default.receiver]
+	scrape_interval = "30s"
+}
+
+prometheus.exporter.self "agent" { }
+
+discovery.relabel "agent" {
+	targets = prometheus.exporter.self.agent.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "alloy"
+	}
+
+	rule {
+		target_label = "instance"
+		replacement  = sys.env("MONITORING_HOST")
+	}
+}
+
+prometheus.scrape "agent" {
+	targets         = discovery.relabel.agent.output
+	forward_to      = [prometheus.relabel.agent.receiver]
+	scrape_interval = "60s"
+}
+
+prometheus.relabel "agent" {
+	forward_to = [prometheus.remote_write.default.receiver]
+
+	rule {
+		source_labels = ["__name__"]
+		regex         = "alloy_build_info|alloy_component_controller_running_components|prometheus_remote_storage_samples_(total|failed_total|pending)|loki_write_(sent|dropped)_entries_total"
+		action        = "keep"
+	}
+}
+
+loki.relabel "journal" {
+	forward_to = []
+
+	rule {
+		source_labels = ["__journal__systemd_unit"]
+		target_label  = "unit"
+	}
+
+	rule {
+		source_labels = ["__journal_priority_keyword"]
+		target_label  = "level"
+	}
+}
+
+loki.source.journal "system" {
+	max_age       = "12h"
+	relabel_rules = loki.relabel.journal.rules
+	labels        = {source = "journal"}
+	forward_to    = [loki.write.default.receiver]
+}

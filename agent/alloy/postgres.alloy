@@ -1,0 +1,43 @@
+// PostgreSQL. POSTGRES_DSN, e.g. postgresql://monitoring:secret@127.0.0.1:5432/postgres?sslmode=disable
+// The user needs the pg_monitor role.
+
+prometheus.exporter.postgres "db" {
+	data_source_names = [sys.env("POSTGRES_DSN")]
+
+	autodiscovery {
+		enabled = true
+	}
+}
+
+discovery.relabel "postgres" {
+	targets = prometheus.exporter.postgres.db.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "postgres"
+	}
+
+	rule {
+		target_label = "instance"
+		replacement  = sys.env("MONITORING_HOST")
+	}
+}
+
+prometheus.scrape "postgres" {
+	targets         = discovery.relabel.postgres.output
+	forward_to      = [prometheus.remote_write.default.receiver]
+	scrape_interval = "30s"
+}
+
+local.file_match "postgres_logs" {
+	path_targets = [{
+		"__path__" = string.format("%s/var/log/postgresql/*.log", sys.env("HOST_ROOT")),
+		"source"   = "file",
+		"service"  = "postgres",
+	}]
+}
+
+loki.source.file "postgres_logs" {
+	targets    = local.file_match.postgres_logs.targets
+	forward_to = [loki.write.default.receiver]
+}

@@ -1,0 +1,46 @@
+// MySQL / MariaDB. MYSQL_DSN, e.g. monitoring:secret@(127.0.0.1:3306)/
+// The user needs PROCESS, REPLICATION CLIENT and SELECT.
+
+prometheus.exporter.mysql "db" {
+	data_source_name = sys.env("MYSQL_DSN")
+}
+
+discovery.relabel "mysql" {
+	targets = prometheus.exporter.mysql.db.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "mysql"
+	}
+
+	rule {
+		target_label = "instance"
+		replacement  = sys.env("MONITORING_HOST")
+	}
+}
+
+prometheus.scrape "mysql" {
+	targets         = discovery.relabel.mysql.output
+	forward_to      = [prometheus.remote_write.default.receiver]
+	scrape_interval = "30s"
+}
+
+local.file_match "mysql_logs" {
+	path_targets = [
+		{
+			"__path__" = string.format("%s/var/log/mysql/*.log", sys.env("HOST_ROOT")),
+			"source"   = "file",
+			"service"  = "mysql",
+		},
+		{
+			"__path__" = string.format("%s/var/log/mariadb/*.log", sys.env("HOST_ROOT")),
+			"source"   = "file",
+			"service"  = "mysql",
+		},
+	]
+}
+
+loki.source.file "mysql_logs" {
+	targets    = local.file_match.mysql_logs.targets
+	forward_to = [loki.write.default.receiver]
+}

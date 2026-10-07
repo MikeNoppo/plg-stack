@@ -1,0 +1,39 @@
+// MongoDB. MONGODB_URI, e.g. mongodb://monitoring:secret@127.0.0.1:27017/admin
+// The user needs the clusterMonitor role.
+
+prometheus.exporter.mongodb "db" {
+	mongodb_uri = sys.env("MONGODB_URI")
+}
+
+discovery.relabel "mongodb" {
+	targets = prometheus.exporter.mongodb.db.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "mongodb"
+	}
+
+	rule {
+		target_label = "instance"
+		replacement  = sys.env("MONITORING_HOST")
+	}
+}
+
+prometheus.scrape "mongodb" {
+	targets         = discovery.relabel.mongodb.output
+	forward_to      = [prometheus.remote_write.default.receiver]
+	scrape_interval = "30s"
+}
+
+local.file_match "mongodb_logs" {
+	path_targets = [{
+		"__path__" = string.format("%s/var/log/mongodb/*.log", sys.env("HOST_ROOT")),
+		"source"   = "file",
+		"service"  = "mongodb",
+	}]
+}
+
+loki.source.file "mongodb_logs" {
+	targets    = local.file_match.mongodb_logs.targets
+	forward_to = [loki.write.default.receiver]
+}

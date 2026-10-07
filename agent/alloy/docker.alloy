@@ -1,0 +1,136 @@
+// Docker hosts: per-container metrics (cAdvisor) and container logs.
+// `service` is the Swarm service (Dokploy applications), else the compose
+// service, else the container name, so dashboards work for all three.
+
+prometheus.exporter.cadvisor "containers" {
+	docker_host            = "unix:///var/run/docker.sock"
+	docker_only            = true
+	storage_duration       = "2m"
+	store_container_labels = false
+
+	allowlisted_container_labels = [
+		"com.docker.compose.project",
+		"com.docker.compose.service",
+		"com.docker.swarm.service.name",
+	]
+}
+
+discovery.relabel "cadvisor" {
+	targets = prometheus.exporter.cadvisor.containers.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "cadvisor"
+	}
+
+	rule {
+		target_label = "instance"
+		replacement  = sys.env("MONITORING_HOST")
+	}
+}
+
+prometheus.scrape "cadvisor" {
+	targets         = discovery.relabel.cadvisor.output
+	forward_to      = [prometheus.relabel.cadvisor.receiver]
+	scrape_interval = "30s"
+}
+
+prometheus.relabel "cadvisor" {
+	forward_to = [prometheus.remote_write.default.receiver]
+
+	rule {
+		source_labels = ["__name__"]
+		regex         = "container_(cpu_usage_seconds_total|memory_working_set_bytes|spec_memory_limit_bytes|network_(receive|transmit)_bytes_total|fs_(reads|writes)_bytes_total|start_time_seconds|oom_events_total)"
+		action        = "keep"
+	}
+
+	rule {
+		source_labels = ["name"]
+		regex         = ""
+		action        = "drop"
+	}
+
+	rule {
+		source_labels = ["name"]
+		target_label  = "container"
+	}
+
+	rule {
+		source_labels = ["container_label_com_docker_compose_project"]
+		target_label  = "compose_project"
+	}
+
+	rule {
+		source_labels = ["container_label_com_docker_compose_service", "container_label_com_docker_swarm_service_name", "name"]
+		separator     = ";"
+		regex         = "([^;]*);([^;]*);(.*)"
+		target_label  = "service"
+		replacement   = "$1$2"
+	}
+
+	rule {
+		source_labels = ["service", "name"]
+		separator     = ";"
+		regex         = ";(.*)"
+		target_label  = "service"
+		replacement   = "$1"
+	}
+
+	rule {
+		regex  = "container_label_.*|name|id"
+		action = "labeldrop"
+	}
+}
+
+discovery.docker "containers" {
+	host             = "unix:///var/run/docker.sock"
+	refresh_interval = "30s"
+}
+
+discovery.relabel "docker_logs" {
+	targets = discovery.docker.containers.targets
+
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.*)"
+		target_label  = "container"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+		target_label  = "compose_project"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service", "__meta_docker_container_label_com_docker_swarm_service_name"]
+		separator     = ";"
+		regex         = "([^;]*);(.*)"
+		target_label  = "service"
+		replacement   = "$1$2"
+	}
+
+	rule {
+		source_labels = ["service", "container"]
+		separator     = ";"
+		regex         = ";(.*)"
+		target_label  = "service"
+		replacement   = "$1"
+	}
+}
+
+loki.relabel "docker_logs" {
+	forward_to = []
+
+	rule {
+		source_labels = ["__meta_docker_container_log_stream"]
+		target_label  = "stream"
+	}
+}
+
+loki.source.docker "containers" {
+	host          = "unix:///var/run/docker.sock"
+	targets       = discovery.relabel.docker_logs.output
+	labels        = {source = "docker"}
+	relabel_rules = loki.relabel.docker_logs.rules
+	forward_to    = [loki.write.default.receiver]
+}

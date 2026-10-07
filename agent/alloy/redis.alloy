@@ -1,0 +1,39 @@
+// Redis. REDIS_ADDR (e.g. 127.0.0.1:6379) and optional REDIS_PASSWORD.
+
+prometheus.exporter.redis "db" {
+	redis_addr     = sys.env("REDIS_ADDR")
+	redis_password = sys.env("REDIS_PASSWORD")
+}
+
+discovery.relabel "redis" {
+	targets = prometheus.exporter.redis.db.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "redis"
+	}
+
+	rule {
+		target_label = "instance"
+		replacement  = sys.env("MONITORING_HOST")
+	}
+}
+
+prometheus.scrape "redis" {
+	targets         = discovery.relabel.redis.output
+	forward_to      = [prometheus.remote_write.default.receiver]
+	scrape_interval = "30s"
+}
+
+local.file_match "redis_logs" {
+	path_targets = [{
+		"__path__" = string.format("%s/var/log/redis/*.log", sys.env("HOST_ROOT")),
+		"source"   = "file",
+		"service"  = "redis",
+	}]
+}
+
+loki.source.file "redis_logs" {
+	targets    = local.file_match.redis_logs.targets
+	forward_to = [loki.write.default.receiver]
+}
