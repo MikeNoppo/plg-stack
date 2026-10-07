@@ -162,6 +162,47 @@ services:
     volumes:
       - ./watchdog/watchdog.sh:/watchdog.sh:ro
 
+  # Monitors the server this stack runs on, like any other server, through
+  # the public ingest URL. Enabled with COMPOSE_PROFILES=self-monitoring.
+  agent:
+    image: grafana/alloy:${ALLOY_VERSION:-v1.20.1}
+    profiles: [self-monitoring]
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: ${SELF_MONITORING_MEMORY_LIMIT:-512m}
+    network_mode: host
+    pid: host
+    cgroup: host
+    privileged: true
+    environment:
+      MONITORING_URL: ${SELF_MONITORING_URL:-https://${INGEST_DOMAIN}}
+      MONITORING_USER: ${SELF_MONITORING_NAME:-plg-stack}
+      MONITORING_PASSWORD: ${SELF_MONITORING_TOKEN:-}
+      MONITORING_HOST: ${SELF_MONITORING_NAME:-plg-stack}
+      MONITORING_ENV: ${SELF_MONITORING_ENV:-production}
+      AGENT_OFFLINE_BUFFER: ${PROMETHEUS_OOO_WINDOW:-24h}
+      HOST_PROC: /host/proc
+      HOST_SYS: /host/sys
+      HOST_ROOT: /host/root
+    command:
+      - run
+      - --server.http.listen-addr=127.0.0.1:12346
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/plg
+    volumes:
+      - /:/host/root:ro,rslave
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /var/log/journal:/var/log/journal:ro
+      - /run/log/journal:/run/log/journal:ro
+      - /etc/machine-id:/etc/machine-id:ro
+      - ./agent/modules/base.alloy:/etc/alloy/plg/base.alloy:ro
+      - ./agent/modules/docker-logs.alloy:/etc/alloy/plg/docker-logs.alloy:ro
+      - ./agent/modules/docker-metrics.alloy:/etc/alloy/plg/docker-metrics.alloy:ro
+      - agent-data:/var/lib/alloy/data
+
 networks:
   default: {}
 
@@ -171,3 +212,4 @@ volumes:
   prometheus-data:
   loki-data:
   grafana-data:
+  agent-data:
