@@ -566,7 +566,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "node_load5{job=\"node\", host=\"$host\"} / count(node_cpu_seconds_total{job=\"node\", host=\"$host\", mode=\"idle\"})",
+          "expr": "node_load5{job=\"node\", host=\"$host\"} / scalar(count(node_cpu_seconds_total{job=\"node\", host=\"$host\", mode=\"idle\"}))",
           "legendFormat": "__auto",
           "range": false,
           "instant": true

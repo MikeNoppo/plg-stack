@@ -605,7 +605,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (host) (scrape_samples_scraped)",
+          "expr": "sum by (host) (scrape_samples_scraped{host!=\"\"})",
           "legendFormat": "{{host}}",
           "range": false,
           "instant": true
@@ -648,7 +648,15 @@
         "y": 13,
         "w": 24,
         "h": 7
-      }
+      },
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "mode": "outer"
+          }
+        }
+      ]
     },
     {
       "type": "row",
@@ -795,7 +803,7 @@
     {
       "type": "bargauge",
       "title": "Volume log per server (rentang waktu)",
-      "description": "",
+      "description": "Total byte log per server dalam rentang waktu dashboard.",
       "datasource": {
         "type": "loki",
         "uid": "loki"
@@ -836,11 +844,9 @@
         "orientation": "horizontal",
         "showUnfilled": true,
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
+          "values": true,
+          "calcs": [],
+          "fields": "/^Value/"
         }
       },
       "id": 14,
