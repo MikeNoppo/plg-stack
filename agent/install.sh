@@ -43,7 +43,7 @@ EXISTING=""
 
 declare -a CUSTOM_LOG_FILES=() SELECTED=() MODULE_ORDER=() FILE_TARGETS=()
 declare -A SET_VARS=() FROM_PREVIOUS=() DET=() PRESELECT=()
-declare -A M_TITLE=() M_DESC=() M_DETECT=() M_HOOK=() M_PRIV=() M_WHY=() M_REQ=() M_VARS=()
+declare -A M_TITLE=() M_DESC=() M_DETECT=() M_HOOK=() M_PRIV=() M_WHY=() M_REQ=() M_MODES=() M_VARS=()
 declare -A V_FLAGS=() V_PROMPT=() V_DEFAULT=()
 
 if [[ -t 1 ]]; then
@@ -286,6 +286,7 @@ parse_catalog() {
 		detect) M_DETECT[$mod]="$value" ;;
 		hook) M_HOOK[$mod]="$value" ;;
 		requires) M_REQ[$mod]="$value" ;;
+		modes) M_MODES[$mod]="$value" ;;
 		privileged) M_PRIV[$mod]="$value" ;;
 		why_privileged) M_WHY[$mod]="$value" ;;
 		var.*)
@@ -436,7 +437,8 @@ detect_module() {
 }
 
 module_available() {
-	[[ "${M_REQ[$1]:-}" != docker || $HAS_DOCKER -eq 1 ]]
+	[[ "${M_REQ[$1]:-}" != docker || $HAS_DOCKER -eq 1 ]] || return 1
+	[[ -z "$MODE" || -z "${M_MODES[$1]:-}" || ",${M_MODES[$1]// /}," == *",$MODE,"* ]]
 }
 
 detect_docker_apps() {
@@ -1087,7 +1089,7 @@ install_docker() {
 	local path
 	# Bind-mounting a missing path makes Docker create it as an empty
 	# directory on the host, which breaks /etc/machine-id in particular.
-	for path in /var/run/docker.sock /var/lib/docker /dev/disk /var/log/journal /run/log/journal /etc/machine-id; do
+	for path in /var/run/docker.sock /run/containerd /var/lib/docker /dev/disk /var/log/journal /run/log/journal /etc/machine-id; do
 		[[ -e "$path" ]] && mounts+=(-v "$path:$path:ro")
 	done
 

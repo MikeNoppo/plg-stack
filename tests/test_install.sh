@@ -51,6 +51,13 @@ resolve_selection "docker-logs,docker-logs"
 assert_eq "base docker-logs" "${SELECTED[*]}" "duplicates are ignored"
 assert_eq "1,2" "$(selection_numbers base,docker-logs)" "names convert back to numbers"
 
+MODE=native
+assert_fails "docker-metrics is not offered in native mode" resolve_selection "docker-metrics" 2>/dev/null
+assert_ok "docker-logs still works in native mode" resolve_selection "docker-logs"
+MODE=docker
+assert_ok "docker-metrics is offered in docker mode" resolve_selection "docker-metrics"
+MODE=""
+
 HAS_DOCKER=0
 MODULES_ARG="" MONITORING_MODULES="base,docker-logs,postgres,gone"
 assert_eq "base,postgres" "$(default_selection)" "unavailable modules from the previous install are dropped"
