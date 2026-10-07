@@ -228,6 +228,18 @@ prometheus.relabel "agent" {
 		regex         = "alloy_build_info|alloy_component_controller_running_components|prometheus_remote_storage_(samples_total|samples_failed_total|samples_retried_total|samples_pending|highest_timestamp_in_seconds|queue_highest_sent_timestamp_seconds)|loki_write_(sent|dropped)_entries_total|loki_write_batch_retries_total|loki_process_dropped_lines_total"
 		action        = "keep"
 	}
+
+	// loki.write labels its metrics with the endpoint as `host`; an existing
+	// label would keep remote_write from adding the agent's own host label.
+	rule {
+		source_labels = ["host"]
+		target_label  = "endpoint"
+	}
+
+	rule {
+		regex  = "host"
+		action = "labeldrop"
+	}
 }
 
 loki.relabel "journal" {
