@@ -96,6 +96,71 @@
         "options": []
       },
       {
+        "type": "custom",
+        "name": "level",
+        "label": "Level",
+        "query": "emerg,alert,crit,error,warning,notice,info,debug",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": [
+          {
+            "text": "All",
+            "value": "$__all",
+            "selected": true
+          },
+          {
+            "text": "emerg",
+            "value": "emerg",
+            "selected": false
+          },
+          {
+            "text": "alert",
+            "value": "alert",
+            "selected": false
+          },
+          {
+            "text": "crit",
+            "value": "crit",
+            "selected": false
+          },
+          {
+            "text": "error",
+            "value": "error",
+            "selected": false
+          },
+          {
+            "text": "warning",
+            "value": "warning",
+            "selected": false
+          },
+          {
+            "text": "notice",
+            "value": "notice",
+            "selected": false
+          },
+          {
+            "text": "info",
+            "value": "info",
+            "selected": false
+          },
+          {
+            "text": "debug",
+            "value": "debug",
+            "selected": false
+          }
+        ]
+      },
+      {
         "type": "textbox",
         "name": "search",
         "label": "Cari",
@@ -861,7 +926,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{source=\"docker\", env=~\"$env\", host=~\"$host\", service=~\"$service\"} |~ \"(?i)$search\"",
+          "expr": "{source=\"docker\", level=~\"$level\", env=~\"$env\", host=~\"$host\", service=~\"$service\"} |~ \"(?i)$search\"",
           "queryType": "range"
         }
       ],

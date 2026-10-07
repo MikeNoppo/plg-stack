@@ -136,6 +136,71 @@
         "options": []
       },
       {
+        "type": "custom",
+        "name": "level",
+        "label": "Level",
+        "query": "emerg,alert,crit,error,warning,notice,info,debug",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": [
+          {
+            "text": "All",
+            "value": "$__all",
+            "selected": true
+          },
+          {
+            "text": "emerg",
+            "value": "emerg",
+            "selected": false
+          },
+          {
+            "text": "alert",
+            "value": "alert",
+            "selected": false
+          },
+          {
+            "text": "crit",
+            "value": "crit",
+            "selected": false
+          },
+          {
+            "text": "error",
+            "value": "error",
+            "selected": false
+          },
+          {
+            "text": "warning",
+            "value": "warning",
+            "selected": false
+          },
+          {
+            "text": "notice",
+            "value": "notice",
+            "selected": false
+          },
+          {
+            "text": "info",
+            "value": "info",
+            "selected": false
+          },
+          {
+            "text": "debug",
+            "value": "debug",
+            "selected": false
+          }
+        ]
+      },
+      {
         "type": "textbox",
         "name": "search",
         "label": "Cari",
@@ -185,7 +250,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "sum by (host) (count_over_time({env=~\"$env\", host=~\"$host\", source=~\"$source\", service=~\"$service\"} |~ \"(?i)$search\" [$__auto]))",
+          "expr": "sum by (host) (count_over_time({level=~\"$level\", env=~\"$env\", host=~\"$host\", source=~\"$source\", service=~\"$service\"} |~ \"(?i)$search\" [$__auto]))",
           "queryType": "range",
           "legendFormat": "{{host}}"
         }
@@ -243,7 +308,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "sum by (host) (count_over_time({env=~\"$env\", host=~\"$host\", source=~\"$source\", service=~\"$service\"} |~ \"(?i)(error|fatal|panic|exception|critical)\" [$__auto]))",
+          "expr": "sum by (host) (count_over_time({level=~\"$level\", env=~\"$env\", host=~\"$host\", source=~\"$source\", service=~\"$service\"} |~ \"(?i)(error|fatal|panic|exception|critical)\" [$__auto]))",
           "queryType": "range",
           "legendFormat": "{{host}}"
         }
@@ -300,7 +365,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{env=~\"$env\", host=~\"$host\", source=~\"$source\", service=~\"$service\"} |~ \"(?i)$search\"",
+          "expr": "{level=~\"$level\", env=~\"$env\", host=~\"$host\", source=~\"$source\", service=~\"$service\"} |~ \"(?i)$search\"",
           "queryType": "range"
         }
       ],
