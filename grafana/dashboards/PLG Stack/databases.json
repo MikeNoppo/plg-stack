@@ -3,7 +3,7 @@
   "title": "Databases",
   "description": "PostgreSQL, MySQL/MariaDB, Redis, dan MongoDB yang dipantau agent.",
   "tags": [
-    "monitoring-stack"
+    "plg-stack"
   ],
   "timezone": "browser",
   "editable": true,
@@ -95,7 +95,7 @@
     {
       "type": "dashboards",
       "tags": [
-        "monitoring-stack"
+        "plg-stack"
       ],
       "asDropdown": true,
       "title": "Dashboards",

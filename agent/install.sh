@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installs the monitoring agent (Grafana Alloy) on a server to be monitored.
+# Installs the PLG Stack agent (Grafana Alloy) on a server to be monitored.
 #
 #   curl -fsSL https://INGEST_DOMAIN/agent/install.sh | sudo bash
 #   curl -fsSL https://INGEST_DOMAIN/agent/install.sh | sudo bash -s -- \
@@ -10,11 +10,11 @@
 set -euo pipefail
 
 ALLOY_VERSION="${ALLOY_VERSION:-v1.20.1}"
-CONTAINER_NAME="monitoring-agent"
-DOCKER_DIR="/opt/monitoring-agent"
-NATIVE_DIR="/etc/alloy/monitoring"
-NATIVE_ENV="/etc/alloy/monitoring.env"
-NATIVE_DROPIN="/etc/systemd/system/alloy.service.d/monitoring.conf"
+CONTAINER_NAME="plg-agent"
+DOCKER_DIR="/opt/plg-agent"
+NATIVE_DIR="/etc/alloy/plg"
+NATIVE_ENV="/etc/alloy/plg.env"
+NATIVE_DROPIN="/etc/systemd/system/alloy.service.d/plg.conf"
 ALLOY_HTTP="127.0.0.1:12345"
 DB_MODULES=(postgres mysql redis mongodb)
 
@@ -53,13 +53,13 @@ die() {
 
 usage() {
 	cat <<'EOF'
-Install agent monitoring (Grafana Alloy) di server ini.
+Install agent PLG Stack (Grafana Alloy) di server ini.
 
 Tanpa opsi, installer berjalan interaktif: memeriksa server, merekomendasikan
 mode, lalu menanyakan yang perlu diisi.
 
 Opsi:
-  --url URL             Alamat ingest stack monitoring, mis. https://ingest.example.com
+  --url URL             Alamat ingest PLG Stack, mis. https://ingest.example.com
   --user USER           User basic auth ingest
   --password PASS       Password basic auth ingest
   --name NAME           Nama server di dashboard (default: hostname)
@@ -337,7 +337,7 @@ choose_mode() {
 valid_label() { [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; }
 
 ask_connection() {
-	info "Koneksi ke stack monitoring"
+	info "Koneksi ke PLG Stack"
 	while :; do
 		ask MONITORING_URL "URL ingest (mis. https://ingest.example.com)" "$MONITORING_URL"
 		MONITORING_URL="${MONITORING_URL%/}"
@@ -353,7 +353,7 @@ ask_connection() {
 	code="$(curl -sS -o /dev/null -w '%{http_code}' -u "$MONITORING_USER:$MONITORING_PASSWORD" \
 		--max-time 10 "$MONITORING_URL/ping" 2>/dev/null || true)"
 	case "$code" in
-	200) ok "Stack monitoring bisa dihubungi dan kredensial benar." ;;
+	200) ok "PLG Stack bisa dihubungi dan kredensial benar." ;;
 	401) die "Kredensial ingest ditolak (HTTP 401)." ;;
 	*)
 		warn "Tidak bisa memverifikasi $MONITORING_URL/ping (HTTP ${code:-gagal})."
@@ -566,8 +566,8 @@ install_docker() {
 		-v /:/host/root:ro,rslave
 		-v /proc:/host/proc:ro
 		-v /sys:/host/sys:ro
-		-v "$DOCKER_DIR/alloy:/etc/alloy/monitoring:ro"
-		-v monitoring-agent-data:/var/lib/alloy/data
+		-v "$DOCKER_DIR/alloy:/etc/alloy/plg:ro"
+		-v plg-agent-data:/var/lib/alloy/data
 	)
 	local path
 	# Bind-mounting a missing path makes Docker create it as an empty
@@ -579,10 +579,10 @@ install_docker() {
 	docker run -d --name "$CONTAINER_NAME" --restart unless-stopped \
 		--network host --pid host --cgroupns host --privileged \
 		--env-file "$DOCKER_DIR/agent.env" \
-		--label com.monitoring-stack.agent=true \
+		--label com.plg-stack.agent=true \
 		"${mounts[@]}" \
 		"grafana/alloy:$ALLOY_VERSION" \
-		run --server.http.listen-addr="$ALLOY_HTTP" --storage.path=/var/lib/alloy/data /etc/alloy/monitoring \
+		run --server.http.listen-addr="$ALLOY_HTTP" --storage.path=/var/lib/alloy/data /etc/alloy/plg \
 		>/dev/null
 	ok "Container $CONTAINER_NAME berjalan."
 }
@@ -684,7 +684,7 @@ print_logs_hint() {
 
 remove_docker() {
 	docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
-	docker volume rm monitoring-agent-data >/dev/null 2>&1 || true
+	docker volume rm plg-agent-data >/dev/null 2>&1 || true
 	rm -rf "$DOCKER_DIR"
 	ok "Agent mode docker dihapus."
 }
@@ -729,7 +729,7 @@ main() {
 		return
 	fi
 
-	echo "${BOLD}Monitoring agent installer${RESET} (Grafana Alloy $ALLOY_VERSION)"
+	echo "${BOLD}PLG Stack agent installer${RESET} (Grafana Alloy $ALLOY_VERSION)"
 	detect_system
 	detect_databases
 	detect_existing

@@ -23,7 +23,7 @@ die() {
 }
 
 # Dokploy names the compose project after its app, so find it from the
-# volume labels instead of assuming "monitoring".
+# volume labels instead of assuming "plg-stack".
 if [[ -z "$PROJECT" ]]; then
 	mapfile -t projects < <(docker volume ls --filter label=com.docker.compose.volume=prometheus-data \
 		--format '{{.Label "com.docker.compose.project"}}' | sort -u)

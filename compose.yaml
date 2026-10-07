@@ -1,4 +1,4 @@
-name: monitoring
+name: plg-stack
 
 services:
   gateway:

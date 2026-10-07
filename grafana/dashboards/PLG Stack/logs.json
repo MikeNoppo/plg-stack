@@ -3,7 +3,7 @@
   "title": "Logs",
   "description": "Cari log dari semua server: container, journald, dan file log database.",
   "tags": [
-    "monitoring-stack"
+    "plg-stack"
   ],
   "timezone": "browser",
   "editable": true,
@@ -161,7 +161,7 @@
     {
       "type": "dashboards",
       "tags": [
-        "monitoring-stack"
+        "plg-stack"
       ],
       "asDropdown": true,
       "title": "Dashboards",

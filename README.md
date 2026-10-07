@@ -1,6 +1,6 @@
-# monitoring-stack
+# PLG Stack
 
-Boilerplate monitoring **Grafana + Prometheus + Loki** dengan agent **Grafana Alloy**.
+**P**rometheus + **L**oki + **G**rafana: boilerplate monitoring dengan agent **Grafana Alloy**.
 Stack bisa dijalankan di **Dokploy** atau di **server biasa** dari repo yang sama, dan
 dipindah antar server tanpa menyentuh agent di server-server yang dipantau.
 
@@ -40,7 +40,7 @@ Prinsip yang membuat stack ini mudah dipindah:
 | `gateway/Caddyfile` | Routing domain, basic auth ingest, TLS otomatis |
 | `prometheus/`, `loki/` | Konfigurasi server; `loki-s3.yaml` untuk log di S3 |
 | `grafana/provisioning/` | Datasource, provider dashboard, alert rules |
-| `grafana/dashboards/` | Dashboard JSON (folder *Monitoring*) |
+| `grafana/dashboards/` | Dashboard JSON (folder *PLG Stack*) |
 | `grafana/alerting-examples/` | Contoh contact point Telegram / Slack / email |
 | `agent/install.sh` | Installer agent satu perintah |
 | `agent/alloy/*.alloy` | Modul konfigurasi Alloy (base, docker, postgres, mysql, redis, mongodb) |
@@ -71,7 +71,7 @@ retensi, dan penyimpanan log (disk lokal atau S3).
 ### B. Di server biasa (tanpa Dokploy)
 
 ```bash
-git clone <repo> monitoring-stack && cd monitoring-stack
+git clone https://github.com/MikeNoppo/plg-stack.git && cd plg-stack
 ./scripts/setup.sh          # pilih mode standalone
 docker compose up -d
 ```
@@ -103,7 +103,7 @@ Yang dilakukan installer:
    (PostgreSQL, MySQL/MariaDB, Redis, MongoDB), apakah native atau di dalam
    container, agent monitoring lain, dan instalasi sebelumnya.
 2. **Merekomendasikan mode**:
-   - **docker**: Alloy jalan sebagai container `monitoring-agent`. Dipakai untuk
+   - **docker**: Alloy jalan sebagai container `plg-agent`. Dipakai untuk
      server Docker/Dokploy; semua container ikut terpantau.
    - **native**: paket `alloy` dari repo resmi Grafana + service systemd. Dipakai
      untuk server tanpa Docker, terutama server database.
@@ -143,7 +143,7 @@ container.
 
 ## 3. Dashboard dan alert
 
-Dashboard di folder **Monitoring**:
+Dashboard di folder **PLG Stack**:
 
 - **Fleet Overview**: semua server dalam satu tabel (CPU, RAM, disk, uptime,
   versi agent) dan daftar server yang berhenti mengirim data.
@@ -170,7 +170,7 @@ Tujuan notifikasi belum ditentukan, jadi contoh disediakan terpisah:
 ### Mengubah dashboard
 
 Dashboard di-provision read-only. Edit di Grafana → *Save as* copy, atau
-*Export → JSON*, simpan ke `grafana/dashboards/Monitoring/`, lalu commit.
+*Export → JSON*, simpan ke `grafana/dashboards/PLG Stack/`, lalu commit.
 
 ## 4. Memindahkan stack ke server lain
 
@@ -201,14 +201,14 @@ lokal sehingga tidak perlu dipindah.
 - Agent mode docker berjalan `--privileged` dengan akses read-only ke root
   filesystem dan socket Docker (dibutuhkan cAdvisor dan metrik host). UI Alloy
   hanya listen di `127.0.0.1:12345`.
-- File kredensial agent: `/opt/monitoring-agent/agent.env` (docker) atau
-  `/etc/alloy/monitoring.env` (native), keduanya mode `600`.
+- File kredensial agent: `/opt/plg-agent/agent.env` (docker) atau
+  `/etc/alloy/plg.env` (native), keduanya mode `600`.
 
 ## Troubleshooting
 
 | Gejala | Cek |
 |---|---|
-| Server tidak muncul di dashboard | `docker logs monitoring-agent` / `journalctl -u alloy`; `curl -u agent:PASS https://ingest.../ping` |
+| Server tidak muncul di dashboard | `docker logs plg-agent` / `journalctl -u alloy`; `curl -u agent:PASS https://ingest.../ping` |
 | Komponen agent tidak sehat | UI Alloy: `ssh -L 12345:127.0.0.1:12345 server`, lalu buka http://localhost:12345 |
 | Database `DOWN` | Kredensial DSN salah, atau user belum punya grant yang dibutuhkan |
 | Log file DB tidak masuk | Permission: agent native berjalan sebagai user `alloy` dengan grup `adm` dan `systemd-journal` |

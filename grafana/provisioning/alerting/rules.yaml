@@ -38,7 +38,7 @@ groups:
         labels: { severity: critical }
         annotations:
           summary: 'Server {{ .Labels.host }} ({{ .Labels.env }}) tidak mengirim data lebih dari 5 menit'
-          description: Server mati, jaringan putus, atau agent berhenti. Cek `systemctl status alloy` atau `docker logs monitoring-agent`.
+          description: Server mati, jaringan putus, atau agent berhenti. Cek `systemctl status alloy` atau `docker logs plg-agent`.
 
       - uid: disk-usage-high
         title: Disk hampir penuh

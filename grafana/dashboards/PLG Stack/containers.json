@@ -3,7 +3,7 @@
   "title": "Containers",
   "description": "Metrik dan log container Docker per service (Dokploy, compose, Swarm).",
   "tags": [
-    "monitoring-stack"
+    "plg-stack"
   ],
   "timezone": "browser",
   "editable": true,
@@ -121,7 +121,7 @@
     {
       "type": "dashboards",
       "tags": [
-        "monitoring-stack"
+        "plg-stack"
       ],
       "asDropdown": true,
       "title": "Dashboards",

@@ -3,7 +3,7 @@
   "title": "Fleet Overview",
   "description": "Ringkasan semua server yang dimonitor.",
   "tags": [
-    "monitoring-stack"
+    "plg-stack"
   ],
   "timezone": "browser",
   "editable": true,
@@ -52,7 +52,7 @@
     {
       "type": "dashboards",
       "tags": [
-        "monitoring-stack"
+        "plg-stack"
       ],
       "asDropdown": true,
       "title": "Dashboards",
