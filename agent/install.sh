@@ -34,7 +34,7 @@ ASSUME_YES=0
 UNINSTALL=0
 DOCKER_MODULE=""
 
-declare -A DB_NATIVE=() DB_CONTAINER=()
+declare -A DB_NATIVE=() DB_CONTAINER=() FROM_PREVIOUS=()
 declare -a MODULES=()
 
 if [[ -t 1 ]]; then
@@ -257,7 +257,10 @@ load_env_file() {
 			value="${value//\\\"/\"}"
 			value="${value//\\\\/\\}"
 		fi
-		[[ -n "${!key}" ]] || printf -v "$key" '%s' "$value"
+		if [[ -z "${!key}" ]]; then
+			printf -v "$key" '%s' "$value"
+			FROM_PREVIOUS[$key]=1
+		fi
 	done <"$1"
 }
 
@@ -397,9 +400,12 @@ choose_modules() {
 }
 
 db_wanted() {
-	local db="$1" given="$2"
-	if [[ -n "$given" ]]; then
-		return 0
+	local db="$1" key="$2"
+	if [[ -n "${!key}" ]]; then
+		[[ -z "${FROM_PREVIOUS[$key]:-}" ]] && return 0
+		confirm "Modul $db aktif di instalasi sebelumnya. Tetap pantau?" y && return 0
+		printf -v "$key" '%s' ""
+		return 1
 	fi
 	if [[ -n "${DB_NATIVE[$db]:-}" ]]; then
 		interactive && confirm "$db terdeteksi berjalan di mesin ini. Pantau?" y
@@ -417,7 +423,7 @@ as_user() {
 }
 
 setup_postgres() {
-	db_wanted postgres "$POSTGRES_DSN" || return 0
+	db_wanted postgres POSTGRES_DSN || return 0
 	if [[ -z "$POSTGRES_DSN" && -n "${DB_NATIVE[postgres]:-}" ]] && id postgres >/dev/null 2>&1 &&
 		confirm "Buat user database 'monitoring' (role pg_monitor) otomatis?" y; then
 		local pw port
@@ -448,7 +454,7 @@ SQL
 }
 
 setup_mysql() {
-	db_wanted mysql "$MYSQL_DSN" || return 0
+	db_wanted mysql MYSQL_DSN || return 0
 	if [[ -z "$MYSQL_DSN" && -n "${DB_NATIVE[mysql]:-}" ]] && command -v mysql >/dev/null &&
 		confirm "Buat user database 'monitoring' (PROCESS, REPLICATION CLIENT, SELECT) otomatis?" y; then
 		local pw port
@@ -473,7 +479,10 @@ SQL
 }
 
 setup_redis() {
-	db_wanted redis "$REDIS_ADDR" || return 0
+	if ! db_wanted redis REDIS_ADDR; then
+		REDIS_PASSWORD=""
+		return 0
+	fi
 	if [[ -z "$REDIS_PASSWORD" ]]; then
 		local conf
 		for conf in /etc/redis/redis.conf /etc/redis.conf /etc/redis/*.conf; do
@@ -488,7 +497,7 @@ setup_redis() {
 }
 
 setup_mongodb() {
-	db_wanted mongodb "$MONGODB_URI" || return 0
+	db_wanted mongodb MONGODB_URI || return 0
 	if [[ -z "$MONGODB_URI" ]]; then
 		echo "  ${DIM}User butuh role clusterMonitor. Tanpa auth: mongodb://127.0.0.1:27017${RESET}"
 		ask_secret MONGODB_URI "URI MongoDB (mongodb://user:pass@127.0.0.1:27017/admin)" ""
