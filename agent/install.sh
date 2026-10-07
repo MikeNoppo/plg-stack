@@ -1147,8 +1147,15 @@ install_alloy_package() {
 		echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" \
 			>/etc/apt/sources.list.d/grafana.list
 		apt-get update -qq </dev/null
-		apt-get install -y -qq --allow-downgrades "alloy=$version" </dev/null >/dev/null ||
-			{ warn "Versi $version tidak ada di repo, memasang versi terbaru."; apt-get install -y -qq alloy </dev/null >/dev/null; }
+		# Debian package versions carry a revision suffix, e.g. 1.20.1-1.
+		local apt_version
+		apt_version="$(apt-cache madison alloy 2>/dev/null |
+			awk -v v="$version" '$3 == v || index($3, v "-") == 1 {print $3; exit}')"
+		if [[ -z "$apt_version" ]] ||
+			! apt-get install -y -qq --allow-downgrades "alloy=$apt_version" </dev/null >/dev/null; then
+			warn "Versi $version tidak ada di repo, memasang versi terbaru."
+			apt-get install -y -qq alloy </dev/null >/dev/null
+		fi
 	else
 		cat >/etc/yum.repos.d/grafana.repo <<'EOF'
 [grafana]
