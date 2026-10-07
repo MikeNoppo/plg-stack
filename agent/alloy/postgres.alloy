@@ -39,5 +39,5 @@ local.file_match "postgres_logs" {
 
 loki.source.file "postgres_logs" {
 	targets    = local.file_match.postgres_logs.targets
-	forward_to = [loki.write.default.receiver]
+	forward_to = [loki.process.pipeline.receiver]
 }

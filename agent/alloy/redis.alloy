@@ -35,5 +35,5 @@ local.file_match "redis_logs" {
 
 loki.source.file "redis_logs" {
 	targets    = local.file_match.redis_logs.targets
-	forward_to = [loki.write.default.receiver]
+	forward_to = [loki.process.pipeline.receiver]
 }

@@ -131,5 +131,5 @@ loki.source.docker "containers" {
 	targets       = discovery.relabel.docker_logs.output
 	labels        = {source = "docker"}
 	relabel_rules = loki.relabel.docker_logs.rules
-	forward_to    = [loki.write.default.receiver]
+	forward_to    = [loki.process.pipeline.receiver]
 }

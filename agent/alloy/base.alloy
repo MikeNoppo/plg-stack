@@ -1,9 +1,13 @@
-// Settings come from the environment written by install.sh:
-//   MONITORING_URL, MONITORING_USER, MONITORING_PASSWORD, MONITORING_HOST, MONITORING_ENV
+// Inputs, from the environment written by install.sh:
+//   MONITORING_URL, MONITORING_USER, MONITORING_PASSWORD   where and how to send
+//   MONITORING_HOST, MONITORING_ENV, MONITORING_MACHINE_ID labels
+//   AGENT_OFFLINE_BUFFER    how long metrics are kept while the stack is unreachable
+//   LOG_DROP_REGEX, LOG_REDACT_REGEX, LOG_MULTILINE_FIRSTLINE
 //   HOST_PROC, HOST_SYS, HOST_ROOT (only when Alloy runs in a container)
+// Every module sends its logs to loki.process.pipeline.
 
 logging {
-	level  = "warn"
+	level  = coalesce(sys.env("AGENT_LOG_LEVEL"), "warn")
 	format = "logfmt"
 }
 
@@ -15,6 +19,12 @@ prometheus.remote_write "default" {
 			username = sys.env("MONITORING_USER")
 			password = sys.env("MONITORING_PASSWORD")
 		}
+	}
+
+	// Unsent samples survive an outage this long. The stack only accepts
+	// samples within its PROMETHEUS_OOO_WINDOW, so keep the two aligned.
+	wal {
+		max_keepalive_time = coalesce(sys.env("AGENT_OFFLINE_BUFFER"), "24h")
 	}
 
 	external_labels = {
@@ -31,11 +41,86 @@ loki.write "default" {
 			username = sys.env("MONITORING_USER")
 			password = sys.env("MONITORING_PASSWORD")
 		}
+
+		// Retrying forever fills the (blocking) send queue, which stops the
+		// sources from reading. The backlog then waits in journald, the log
+		// files and the container logs, and is read from the saved positions
+		// once the stack is reachable again.
+		max_backoff_retries = 0
 	}
 
 	external_labels = {
 		host = sys.env("MONITORING_HOST"),
 		env  = sys.env("MONITORING_ENV"),
+	}
+}
+
+loki.process "pipeline" {
+	forward_to = [loki.write.default.receiver]
+
+	stage.drop {
+		expression          = coalesce(sys.env("LOG_DROP_REGEX"), "[^\\s\\S]")
+		drop_counter_reason = "plg_drop_regex"
+	}
+
+	stage.match {
+		selector = "{source=~\"docker|file\"}"
+
+		stage.multiline {
+			firstline     = coalesce(sys.env("LOG_MULTILINE_FIRSTLINE"), "^\\S")
+			max_wait_time = "3s"
+			max_lines     = 500
+		}
+	}
+
+	// Level detection for application logs: a level key in JSON or logfmt,
+	// a pino numeric level, or an upper-case level word / [level] in the
+	// first 80 characters. Ordered by severity so the most severe match wins.
+	stage.match {
+		selector = "{source=~\"docker|file\"} |~ `(?i:\"(?:level|lvl|severity|loglevel|log_level)\"\\s*:\\s*\"(?:debug|trace|dbg)\")|(?i:\\b(?:level|lvl|severity)=(?:debug|trace|dbg)\\b)|\"level\"\\s*:\\s*[12]0\\b|^.{0,80}?(?:\\b(?:DEBUG|TRACE|DBG|TRC)\\b|\\[(?:debug|trace)\\])`"
+
+		stage.static_labels {
+			values = {level = "debug"}
+		}
+	}
+
+	stage.match {
+		selector = "{source=~\"docker|file\"} |~ `(?i:\"(?:level|lvl|severity|loglevel|log_level)\"\\s*:\\s*\"(?:info|notice|inf)\")|(?i:\\b(?:level|lvl|severity)=(?:info|notice|inf)\\b)|\"level\"\\s*:\\s*30\\b|^.{0,80}?(?:\\b(?:INFO|NOTICE|INF)\\b|\\[(?:info|notice)\\])`"
+
+		stage.static_labels {
+			values = {level = "info"}
+		}
+	}
+
+	stage.match {
+		selector = "{source=~\"docker|file\"} |~ `(?i:\"(?:level|lvl|severity|loglevel|log_level)\"\\s*:\\s*\"(?:warn|warning|wrn)\")|(?i:\\b(?:level|lvl|severity)=(?:warn|warning|wrn)\\b)|\"level\"\\s*:\\s*40\\b|^.{0,80}?(?:\\b(?:WARN|WARNING|WRN)\\b|\\[(?:warn|warning)\\])`"
+
+		stage.static_labels {
+			values = {level = "warning"}
+		}
+	}
+
+	stage.match {
+		selector = "{source=~\"docker|file\"} |~ `(?i:\"(?:level|lvl|severity|loglevel|log_level)\"\\s*:\\s*\"(?:error|err)\")|(?i:\\b(?:level|lvl|severity)=(?:error|err)\\b)|\"level\"\\s*:\\s*50\\b|^.{0,80}?(?:\\b(?:ERROR|ERR)\\b|\\[(?:error|err)\\])`"
+
+		stage.static_labels {
+			values = {level = "error"}
+		}
+	}
+
+	stage.match {
+		selector = "{source=~\"docker|file\"} |~ `(?i:\"(?:level|lvl|severity|loglevel|log_level)\"\\s*:\\s*\"(?:critical|crit|fatal|panic|emerg|emergency|alert)\")|(?i:\\b(?:level|lvl|severity)=(?:critical|crit|fatal|panic|emerg|alert)\\b)|\"level\"\\s*:\\s*60\\b|^.{0,80}?(?:\\b(?:CRITICAL|CRIT|FATAL|PANIC|EMERG|ALERT|FTL|PNC)\\b|\\[(?:crit|alert|emerg)\\])`"
+
+		stage.static_labels {
+			values = {level = "crit"}
+		}
+	}
+
+	// Masks the value after a password/token/secret key, bearer and basic
+	// credentials, and passwords embedded in URLs.
+	stage.replace {
+		expression = coalesce(sys.env("LOG_REDACT_REGEX"), "(?i)(?:authorization:\\s*(?:bearer|basic)\\s+([^\\s\"']+)|\\b(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret)\\b[\"']?\\s*[:=]\\s*[\"']?([^\\s\"',;&]+)|[a-z][a-z0-9+.-]*://[^:/\\s@]+:([^@/\\s]+)@)")
+		replace    = "***"
 	}
 }
 
@@ -53,6 +138,11 @@ prometheus.exporter.unix "host" {
 
 	netdev {
 		device_exclude = "^(lo|veth.*|docker.*|br-.*|virbr.*|vxlan.*|cali.*|flannel.*)$"
+	}
+
+	// Custom metrics: any script can drop a *.prom file here.
+	textfile {
+		directory = string.format("%s/var/lib/plg-agent/textfile", sys.env("HOST_ROOT"))
 	}
 }
 
@@ -90,6 +180,12 @@ discovery.relabel "agent" {
 		target_label = "instance"
 		replacement  = sys.env("MONITORING_HOST")
 	}
+
+	// Two machines sharing one host name show up as two machine_id values.
+	rule {
+		target_label = "machine_id"
+		replacement  = sys.env("MONITORING_MACHINE_ID")
+	}
 }
 
 prometheus.scrape "agent" {
@@ -103,7 +199,7 @@ prometheus.relabel "agent" {
 
 	rule {
 		source_labels = ["__name__"]
-		regex         = "alloy_build_info|alloy_component_controller_running_components|prometheus_remote_storage_samples_(total|failed_total|pending)|loki_write_(sent|dropped)_entries_total"
+		regex         = "alloy_build_info|alloy_component_controller_running_components|prometheus_remote_storage_(samples_total|samples_failed_total|samples_retried_total|samples_pending|highest_timestamp_in_seconds|queue_highest_sent_timestamp_seconds)|loki_write_(sent|dropped)_entries_total|loki_write_batch_retries_total|loki_process_dropped_lines_total"
 		action        = "keep"
 	}
 }
@@ -126,5 +222,5 @@ loki.source.journal "system" {
 	max_age       = "12h"
 	relabel_rules = loki.relabel.journal.rules
 	labels        = {source = "journal"}
-	forward_to    = [loki.write.default.receiver]
+	forward_to    = [loki.process.pipeline.receiver]
 }

@@ -42,5 +42,5 @@ local.file_match "mysql_logs" {
 
 loki.source.file "mysql_logs" {
 	targets    = local.file_match.mysql_logs.targets
-	forward_to = [loki.write.default.receiver]
+	forward_to = [loki.process.pipeline.receiver]
 }
