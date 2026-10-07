@@ -64,12 +64,12 @@ index_of() {
 }
 
 apply_changes() {
-	if [[ "$(env_value GATEWAY_SCHEME)" == http ]]; then
+	if docker compose ps --status running --services 2>/dev/null | grep -qx gateway; then
+		docker compose up -d gateway >/dev/null 2>&1
+		echo "==> Gateway dimuat ulang dengan token terbaru."
+	elif [[ "$(env_value GATEWAY_SCHEME)" == http ]]; then
 		echo "==> Mode Dokploy: perbarui variabel ini di tab Environment, lalu Deploy:"
 		echo "    AGENT_TOKENS='$(joined_tokens)'"
-	elif docker compose ps --status running --services 2>/dev/null | grep -qx gateway; then
-		docker compose up -d gateway >/dev/null
-		echo "==> Gateway dimuat ulang dengan token terbaru."
 	else
 		echo "==> Token tersimpan di .env; berlaku saat stack dijalankan (docker compose up -d)."
 	fi
