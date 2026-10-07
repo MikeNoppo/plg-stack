@@ -170,6 +170,14 @@ docker() {
 assert_eq 1 "$(wc -l <"$DOCKER_RUNS")" "other errors are not retried"
 unset -f docker
 
+# --- process detection ------------------------------------------------------------
+
+assert_fails "a process in our own PID namespace is not a container" in_container $$
+sleep 30 &
+sleeper=$!
+assert_fails "child processes share the namespace" in_container "$sleeper"
+kill "$sleeper" 2>/dev/null
+
 # --- prompts --------------------------------------------------------------------
 
 (

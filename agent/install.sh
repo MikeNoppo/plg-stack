@@ -400,7 +400,19 @@ journald_storage_volatile() {
 		/etc/systemd/journald.conf /etc/systemd/journald.conf.d/*.conf >/dev/null
 }
 
-in_container() { grep -qE 'docker|containerd|kubepods|libpod' "/proc/$1/cgroup" 2>/dev/null; }
+# A containerized process has its own PID namespace; systemd services share
+# the host's. The cgroup path is only a fallback: when the whole server is
+# itself a container, every cgroup path mentions docker.
+in_container() {
+	local own theirs
+	own="$(readlink /proc/self/ns/pid 2>/dev/null || true)"
+	theirs="$(readlink "/proc/$1/ns/pid" 2>/dev/null || true)"
+	if [[ -n "$own" && -n "$theirs" ]]; then
+		[[ "$theirs" != "$own" ]]
+		return
+	fi
+	grep -qE 'docker|containerd|kubepods|libpod' "/proc/$1/cgroup" 2>/dev/null
+}
 
 # Sets DET and PRESELECT for one module; returns 1 when nothing was found.
 detect_module() {
