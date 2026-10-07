@@ -158,7 +158,7 @@ prometheus.exporter.unix "host" {
 	disable_collectors = ["btrfs", "infiniband", "ipvs", "xfs", "zfs"]
 
 	filesystem {
-		fs_types_exclude     = "^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fuse\\..*|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|ramfs|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tmpfs|tracefs)$"
+		fs_types_exclude     = "^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|erofs|fuse\\..*|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|ramfs|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tmpfs|tracefs)$"
 		mount_points_exclude = "^/(dev|proc|run|sys|snap|var/lib/docker|var/lib/containers|var/lib/kubelet)($|/)"
 	}
 
