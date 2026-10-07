@@ -170,6 +170,21 @@ docker() {
 assert_eq 1 "$(wc -l <"$DOCKER_RUNS")" "other errors are not retried"
 unset -f docker
 
+# --- prompts --------------------------------------------------------------------
+
+(
+	ASSUME_YES=1
+	for name in answer var prompt default reply hint; do
+		unset "$name"
+		ask "$name" "prompt" "value-$name"
+		assert_eq "value-$name" "${!name:-}" "ask fills a caller variable named $name"
+		unset "$name"
+		ask_secret "$name" "prompt" "secret-$name"
+		assert_eq "secret-$name" "${!name:-}" "ask_secret fills a caller variable named $name"
+	done
+	exit "$FAILURES"
+) || FAILURES=$((FAILURES + $?))
+
 # --- labels ---------------------------------------------------------------------
 
 assert_ok "plain names are valid" valid_label db-01.prod_a

@@ -159,30 +159,32 @@ parse_args() {
 
 interactive() { [[ $ASSUME_YES -eq 0 && -r /dev/tty ]]; }
 
+# Locals use a _ask_ prefix: printf -v writes to the innermost variable with
+# that name, so a local named like the caller's variable would swallow it.
 ask() {
-	local var="$1" prompt="$2" default="${3:-}" answer
+	local _ask_var="$1" _ask_prompt="$2" _ask_default="${3:-}" _ask_reply
 	if ! interactive; then
-		printf -v "$var" '%s' "$default"
+		printf -v "$_ask_var" '%s' "$_ask_default"
 		return
 	fi
-	if [[ -n "$default" ]]; then
-		read -r -p "  $prompt ${DIM}[$default]${RESET}: " answer </dev/tty
+	if [[ -n "$_ask_default" ]]; then
+		read -r -p "  $_ask_prompt ${DIM}[$_ask_default]${RESET}: " _ask_reply </dev/tty
 	else
-		read -r -p "  $prompt: " answer </dev/tty
+		read -r -p "  $_ask_prompt: " _ask_reply </dev/tty
 	fi
-	printf -v "$var" '%s' "${answer:-$default}"
+	printf -v "$_ask_var" '%s' "${_ask_reply:-$_ask_default}"
 }
 
 ask_secret() {
-	local var="$1" prompt="$2" default="${3:-}" answer hint=""
+	local _ask_var="$1" _ask_prompt="$2" _ask_default="${3:-}" _ask_reply _ask_hint=""
 	if ! interactive; then
-		printf -v "$var" '%s' "$default"
+		printf -v "$_ask_var" '%s' "$_ask_default"
 		return
 	fi
-	[[ -n "$default" ]] && hint=" ${DIM}[Enter = pakai yang lama]${RESET}"
-	read -r -s -p "  $prompt$hint: " answer </dev/tty
+	[[ -n "$_ask_default" ]] && _ask_hint=" ${DIM}[Enter = pakai yang lama]${RESET}"
+	read -r -s -p "  $_ask_prompt$_ask_hint: " _ask_reply </dev/tty
 	echo >/dev/tty
-	printf -v "$var" '%s' "${answer:-$default}"
+	printf -v "$_ask_var" '%s' "${_ask_reply:-$_ask_default}"
 }
 
 confirm() {
