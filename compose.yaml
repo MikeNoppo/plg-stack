@@ -1,9 +1,18 @@
 name: plg-stack
 
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: ${LOG_MAX_SIZE:-10m}
+    max-file: "${LOG_MAX_FILE:-3}"
+
 services:
   gateway:
     image: caddy:${CADDY_VERSION:-2.11.7-alpine}
     restart: unless-stopped
+    logging: *logging
+    mem_limit: ${GATEWAY_MEMORY_LIMIT:-256m}
+    cpus: ${GATEWAY_CPUS:-0.5}
     environment:
       GATEWAY_SCHEME: ${GATEWAY_SCHEME:-https}
       GRAFANA_DOMAIN: ${GRAFANA_DOMAIN:?set GRAFANA_DOMAIN}
@@ -18,6 +27,11 @@ services:
         INGEST_PASSWORD_HASH="$$(printf '%s' "$$INGEST_PASSWORD" | caddy hash-password)" || exit 1
         export INGEST_PASSWORD_HASH
         exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9180/metrics"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     volumes:
       - ./gateway/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./agent:/srv/agent:ro
@@ -35,6 +49,9 @@ services:
   prometheus:
     image: prom/prometheus:${PROMETHEUS_VERSION:-v3.15.0}
     restart: unless-stopped
+    logging: *logging
+    mem_limit: ${PROMETHEUS_MEMORY_LIMIT:-1g}
+    cpus: ${PROMETHEUS_CPUS:-1}
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
@@ -42,13 +59,24 @@ services:
       - --storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-8GB}
       - --web.enable-remote-write-receiver
       - --web.enable-lifecycle
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9090/-/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5m
     volumes:
       - ./prometheus:/etc/prometheus:ro
       - prometheus-data:/prometheus
 
+  # The Loki image is distroless (no shell or wget), so it has no
+  # healthcheck; the watchdog checks /ready instead.
   loki:
     image: grafana/loki:${LOKI_VERSION:-3.7.8}
     restart: unless-stopped
+    logging: *logging
+    mem_limit: ${LOKI_MEMORY_LIMIT:-1g}
+    cpus: ${LOKI_CPUS:-1}
     command:
       - -config.file=/etc/loki/${LOKI_CONFIG:-loki.yaml}
       - -config.expand-env=true
@@ -67,6 +95,9 @@ services:
   grafana:
     image: grafana/grafana:${GRAFANA_VERSION:-13.2.3}
     restart: unless-stopped
+    logging: *logging
+    mem_limit: ${GRAFANA_MEMORY_LIMIT:-512m}
+    cpus: ${GRAFANA_CPUS:-1}
     environment:
       GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-https://${GRAFANA_DOMAIN}}
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
@@ -83,6 +114,12 @@ services:
       ALERT_TELEGRAM_CHAT_ID: ${ALERT_TELEGRAM_CHAT_ID:-}
       ALERT_SLACK_WEBHOOK_URL: ${ALERT_SLACK_WEBHOOK_URL:-}
       ALERT_EMAIL_ADDRESSES: ${ALERT_EMAIL_ADDRESSES:-}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 2m
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/etc/grafana/dashboards:ro
