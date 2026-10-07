@@ -5,9 +5,9 @@ Stack bisa dijalankan di **Dokploy** atau di **server biasa** dari repo yang sam
 dipindah antar server tanpa menyentuh agent di server-server yang dipantau.
 
 ```
- [server app]      [server DB]       [server Dokploy]   ...
-    Alloy             Alloy               Alloy
-      │ push (HTTPS + basic auth)          │
+ [server app]      [server DB]       [server stack]   ...
+    Alloy             Alloy           Alloy (bawaan)
+      │ push (HTTPS + token per server)    │
       └──────────────┬────────────────────┘
                      ▼
         ingest.example.com ──┐      grafana.example.com
@@ -15,37 +15,39 @@ dipindah antar server tanpa menyentuh agent di server-server yang dipantau.
    ┌──────────────── gateway (Caddy) ───────────────┐
    │  /api/v1/write    → Prometheus  (metrik)       │
    │  /loki/api/v1/push → Loki       (log)          │
-   │  /agent/*         → installer agent (publik)   │
+   │  /agent/*         → installer + modul (publik) │
    │  grafana.*        → Grafana (dashboard, alert) │
    └────────────────────────────────────────────────┘
+        watchdog ──heartbeat──▶ layanan eksternal (opsional)
 ```
 
-Prinsip yang membuat stack ini mudah dipindah:
+Prinsip yang membuat stack ini mudah dipindah dan diatur:
 
 - **Agent mengirim ke hostname, bukan IP.** Saat stack pindah, cukup ubah DNS
-  `ingest.*` dan `grafana.*`. Metrik di-buffer agent (WAL) selama DNS berpindah;
-  log hanya dicoba ulang sekitar 5 menit, jadi jaga jeda perpindahan tetap singkat.
+  `ingest.*` dan `grafana.*`. Agent menahan data selama terputus (lihat
+  [Mode offline](#mode-offline)).
 - **Semua konfigurasi ada di git.** Datasource, dashboard, dan alert di-provision
   dari file, jadi database Grafana tidak menyimpan apa pun yang penting.
 - **Satu `compose.yaml` untuk dua mode.** TLS diurus Traefik di Dokploy, atau
   Caddy di server biasa (`compose.standalone.yaml` hanya menambah port 80/443).
-- **Rahasia hanya di `.env`**, tidak pernah di-commit.
+- **Kustomisasi di tiga lapis:** `.env` (per deployment stack), opsi installer
+  (per server), dan label Docker (per container).
 
 ## Isi repo
 
 | Path | Fungsi |
 |---|---|
-| `compose.yaml` | Stack: gateway (Caddy), Prometheus, Loki, Grafana |
+| `compose.yaml` | Stack: gateway (Caddy), Prometheus, Loki, Grafana, watchdog, agent self-monitoring |
 | `compose.standalone.yaml` | Membuka port 80/443 untuk mode server biasa |
-| `gateway/Caddyfile` | Routing domain, basic auth ingest, TLS otomatis |
-| `prometheus/`, `loki/` | Konfigurasi server; `loki-s3.yaml` untuk log di S3 |
-| `grafana/provisioning/` | Datasource, provider dashboard, alert rules |
-| `grafana/dashboards/` | Dashboard JSON (folder *PLG Stack*) |
+| `gateway/` | Routing domain, token agent (`entrypoint.sh`), TLS otomatis |
+| `prometheus/`, `loki/` | Konfigurasi server; nilai dinamis diambil dari `.env` |
+| `grafana/provisioning/`, `grafana/dashboards/` | Datasource, alert rules, dashboard |
 | `grafana/alerting-examples/` | Contoh contact point Telegram / Slack / email |
+| `watchdog/` | Heartbeat ke layanan eksternal |
 | `agent/install.sh` | Installer agent satu perintah |
-| `agent/alloy/*.alloy` | Modul konfigurasi Alloy (base, docker, postgres, mysql, redis, mongodb) |
-| `scripts/setup.sh` | Membuat `.env` secara interaktif |
-| `scripts/backup.sh`, `scripts/restore.sh` | Memindahkan data antar server |
+| `agent/modules/` | Modul Alloy + `catalog.conf` (daftar modul untuk installer) |
+| `scripts/` | `setup.sh` (buat `.env`), `agent-token.sh` (token per server), `backup.sh` / `restore.sh` |
+| `tests/` | Unit test script (`tests/run.sh`) |
 
 ## 1. Deploy stack
 
@@ -56,17 +58,24 @@ lalu buat `.env`:
 ./scripts/setup.sh
 ```
 
-Script menanyakan mode (dokploy/standalone), domain, password (default acak),
-retensi, dan penyimpanan log (disk lokal atau S3).
+Script menanyakan, masing-masing dengan penjelasan: mode (dokploy/standalone),
+domain, login Grafana, self-monitoring, URL watchdog, profil resource
+(small/medium/large/custom), retensi metrik dan log (termasuk retensi singkat
+untuk journald dan environment development), jendela data offline, penyimpanan
+log (disk lokal atau S3), dan rotasi log container. Menjalankan ulang `setup.sh`
+memakai nilai lama sebagai default dan tidak menghapus pengaturan lain di `.env`.
 
 ### A. Di Dokploy
 
-1. Project **Monitoring** → *Create Service* → **Compose** (tipe *Docker Compose*).
-2. Provider **GitHub** → repo ini, branch `main`, *Compose Path* `./compose.yaml`.
-3. Tab **Environment**: tempel seluruh isi `.env` hasil `setup.sh` (mode dokploy).
-4. Tab **Domains**: tambahkan `grafana.example.com` dan `ingest.example.com`.
+1. *Create Service* → **Compose** (tipe *Docker Compose*), sumber repo ini,
+   *Compose Path* `./compose.yaml`.
+2. Tab **Environment**: tempel seluruh isi `.env` hasil `setup.sh` (mode dokploy).
+3. Tab **Domains**: tambahkan `grafana.example.com` dan `ingest.example.com`.
    Keduanya diarahkan ke service **`gateway`**, port **80**, HTTPS aktif.
-5. **Deploy**.
+4. **Deploy**.
+
+Agent self-monitoring memakai `network_mode: host`, jadi jangan aktifkan
+*Isolated Deployment* untuk service ini.
 
 ### B. Di server biasa (tanpa Dokploy)
 
@@ -79,78 +88,189 @@ docker compose up -d
 Arahkan DNS kedua domain ke IP server, lalu buka port 80 dan 443. Caddy
 mengambil sertifikat Let's Encrypt otomatis.
 
-### Kebutuhan resource
+### Kustomisasi lewat `.env`
 
-Untuk sekitar 10 server: kurang lebih 2 GB RAM dan 1 vCPU. Disk bergantung pada
-retensi. Prometheus dibatasi `PROMETHEUS_RETENTION_SIZE` (default 8 GB). Log Loki
-paling boros, jadi untuk server dengan disk kecil sebaiknya pakai S3.
+Semua nilai di bawah punya default dan bisa diubah tanpa menyentuh file lain
+(daftar lengkap di `.env.example`):
 
-## 2. Install agent di server yang dipantau
+| Area | Variabel |
+|---|---|
+| Resource | `*_MEMORY_LIMIT`, `*_CPUS` per service (`0` = tanpa batas) |
+| Rotasi log container stack | `LOG_MAX_SIZE`, `LOG_MAX_FILE` |
+| Metrik | `PROMETHEUS_RETENTION`, `PROMETHEUS_RETENTION_SIZE`, `PROMETHEUS_OOO_WINDOW` |
+| Retensi log per jenis | `LOKI_RETENTION`, `LOKI_RETENTION_JOURNAL`, `LOKI_SHORT_RETENTION_ENVS`, `LOKI_SHORT_RETENTION` |
+| Limit Loki | `LOKI_INGESTION_RATE_MB`, `LOKI_PER_STREAM_RATE_MB`, `LOKI_MAX_LINE_SIZE`, `LOKI_MAX_QUERY_SERIES`, `LOKI_QUERY_TIMEOUT`, ... |
+| Grafana | `GRAFANA_PLUGINS`, `GRAFANA_DB_*` (PostgreSQL/MySQL sebagai pengganti SQLite) |
+| Self-monitoring | `COMPOSE_PROFILES=self-monitoring`, `SELF_MONITORING_*` |
+| Watchdog | `WATCHDOG_URL`, `WATCHDOG_FAIL_URL`, `WATCHDOG_INTERVAL` |
 
-Satu perintah, dijalankan di server target:
+Loki hanya membatasi umur log, bukan ukurannya. Pertumbuhan disk dikendalikan
+lewat retensi per jenis dan limit ingest; pantau ukurannya di dashboard
+**PLG Stack Health**.
+
+## 2. Pasang agent di server yang dipantau
+
+Setiap server punya token sendiri, jadi satu server bisa dicabut aksesnya tanpa
+mengganggu yang lain. Di server stack (atau di laptop untuk mode Dokploy):
 
 ```bash
-curl -fsSL https://ingest.example.com/agent/install.sh | sudo bash
+scripts/agent-token.sh add db-01
 ```
 
-Installer dilayani langsung oleh stack (tanpa auth karena tidak berisi rahasia),
-jadi tetap bisa dipakai walau repo GitHub-nya private.
+Perintah itu membuat token dan menampilkan satu baris perintah install untuk
+server `db-01`:
 
-Yang dilakukan installer:
+```bash
+curl -fsSL https://ingest.example.com/agent/install.sh | sudo bash -s -- \
+  --url https://ingest.example.com --name db-01 --token TOKEN
+```
 
-1. **Memeriksa server**: OS dan package manager, systemd, resource, pemakaian
-   disk, Docker (termasuk apakah ini server Dokploy), database yang berjalan
-   (PostgreSQL, MySQL/MariaDB, Redis, MongoDB), apakah native atau di dalam
-   container, agent monitoring lain, dan instalasi sebelumnya.
-2. **Merekomendasikan mode**:
-   - **docker**: Alloy jalan sebagai container `plg-agent`. Dipakai untuk
-     server Docker/Dokploy; semua container ikut terpantau.
-   - **native**: paket `alloy` dari repo resmi Grafana + service systemd. Dipakai
+Di mode standalone gateway langsung dimuat ulang. Di mode Dokploy, script
+menampilkan nilai `AGENT_TOKENS` baru untuk ditempel di tab Environment, lalu
+Deploy. Token lain: `agent-token.sh rotate NAMA`, `revoke NAMA`, `list`.
+
+### Yang dilakukan installer
+
+1. **Memeriksa server**: OS dan package manager, systemd, resource, disk,
+   Docker, journald (disimpan di disk atau hanya di RAM), agent monitoring lain,
+   dan instalasi sebelumnya.
+2. **Koneksi**: URL, nama server (sama dengan nama token), token (langsung dites),
+   environment.
+3. **Mode**, dengan rekomendasi:
+   - **docker**: Alloy jalan sebagai container `plg-agent`.
+   - **native**: paket `alloy` dari repo resmi Grafana + service systemd. Cocok
      untuk server tanpa Docker, terutama server database.
-3. **Menanyakan** URL ingest, kredensial (langsung dites ke `/ping`), nama server,
-   dan environment.
-4. **Memilih modul.** Untuk database native, installer bisa **membuat user
-   `monitoring` otomatis** (PostgreSQL: role `pg_monitor`; MySQL: `PROCESS,
-   REPLICATION CLIENT, SELECT`) dengan password acak.
-5. **Memasang dan memverifikasi** bahwa agent siap dan semua komponen sehat.
+4. **Modul**: setiap modul di `agent/modules/catalog.conf` dideteksi otomatis;
+   yang terdeteksi sudah tercentang. Untuk PostgreSQL/MySQL native, installer
+   bisa membuat user `monitoring` dengan password acak.
+5. **Akses privileged** hanya diminta bila modul yang dipilih membutuhkannya
+   (`docker-metrics`, `process`), dengan penjelasan alasannya. Jika ditolak,
+   modul itu dilewati.
+6. **Pengaturan agent**, masing-masing dengan penjelasan: batas memori (agent
+   di-restart otomatis bila melewatinya), lama data offline disimpan,
+   penyimpanan journald di disk, dan sensor rahasia di log.
+7. **Memasang dan memverifikasi**: agent siap, semua komponen sehat, dan data
+   pertama sudah terkirim.
 
-Menjalankan ulang installer = update konfigurasi; nilai lama dipakai sebagai
+Menjalankan ulang installer = mengubah pilihan; nilai lama dipakai sebagai
 default. Hapus agent dengan `--uninstall`.
 
 ### Non-interaktif (otomasi / banyak server)
 
 ```bash
 curl -fsSL https://ingest.example.com/agent/install.sh | sudo bash -s -- \
-  --url https://ingest.example.com --user agent --password 'RAHASIA' \
-  --name db-01 --env production --mode native \
-  --postgres-dsn 'postgresql://monitoring:pw@127.0.0.1:5432/postgres?sslmode=disable' \
-  --yes
+  --url https://ingest.example.com --name db-01 --token TOKEN --env production \
+  --mode native --modules base,postgres,files,process \
+  --set POSTGRES_DSN='postgresql://monitoring:pw@127.0.0.1:5432/postgres?sslmode=disable' \
+  --memory 512M --offline-buffer 24h --privileged yes --yes
 ```
 
 Opsi lengkap: `install.sh --help`.
 
-### Yang dikumpulkan
+### Modul
 
-| Modul | Metrik | Log |
+| Modul | Deteksi | Isi |
 |---|---|---|
-| `base` (selalu) | CPU, RAM, disk, I/O, network, load, uptime | journald (`source="journal"`) |
-| `docker` | CPU/RAM/network/IO per container (cAdvisor) | semua container (`source="docker"`) |
-| `postgres` / `mysql` / `redis` / `mongodb` | exporter bawaan Alloy | file log di `/var/log/<db>/` |
+| `base` | selalu | CPU, RAM, disk, I/O, network, load, uptime, log journald, metrik custom |
+| `docker-logs` | Docker | Log semua container |
+| `docker-metrics` | Docker | CPU/RAM/network/IO per container (cAdvisor), butuh privileged |
+| `docker-apps` | container berlabel `plg.scrape=true` | `/metrics` aplikasi di container |
+| `files` | nginx, Apache, PHP-FPM, Laravel, Tomcat, PM2, Supervisor | File log aplikasi native |
+| `app-metrics` | ada file di `metrics.d/` | `/metrics` aplikasi native |
+| `process` | java, node, python, php-fpm, nginx, ... | CPU/RAM/IO per proses, butuh privileged |
+| `postgres`, `mysql`, `redis`, `mongodb` | proses database | Metrik dan file log database |
 
-Label yang selalu ada: `host` (nama server) dan `env`. Pada container, `service`
-berisi nama service Swarm (aplikasi Dokploy), service compose, atau nama
-container.
+Label yang selalu ada: `host` (nama server) dan `env`. Log aplikasi mendapat
+label `level` (debug/info/warning/error/crit) yang dideteksi dari log JSON,
+logfmt, pino, atau kata level di awal baris.
+
+**Menambah modul baru** cukup dua langkah, tanpa mengubah `install.sh`: buat
+`agent/modules/NAMA.alloy`, lalu tambahkan blok `[NAMA]` di `catalog.conf`
+(judul, deskripsi, cara deteksi, variabel yang perlu ditanyakan). Format
+lengkapnya ada di bagian atas `catalog.conf`.
+
+### Pengaturan per server tanpa install ulang
+
+Agent memantau folder ini dan memuat perubahan dalam ±1 menit:
+
+| Path | Isi |
+|---|---|
+| `/etc/plg-agent/logs.d/*.yaml` | File log tambahan (`auto.yaml` dibuat installer, sisanya bebas) |
+| `/etc/plg-agent/metrics.d/*.yaml` | Target `/metrics` aplikasi native |
+| `/var/lib/plg-agent/textfile/*.prom` | Metrik custom dari script, mis. waktu backup terakhir |
+
+Contoh `logs.d/myapp.yaml` dan `metrics.d/myapp.yaml`:
+
+```yaml
+- targets: [localhost]
+  labels:
+    __path__: /var/www/myapp/storage/logs/*.log
+    service: myapp
+```
+
+```yaml
+- targets: ["127.0.0.1:9100"]
+  labels:
+    job: myapp
+```
+
+### Pengaturan per container (label Docker)
+
+| Label | Fungsi |
+|---|---|
+| `plg.logs=false` | Log container ini tidak dikirim |
+| `plg.metrics=false` | Metrik container ini tidak dikumpulkan |
+| `plg.service=NAMA` | Nama service di dashboard |
+| `plg.scrape=true` | Ambil `/metrics` container ini (modul `docker-apps`) |
+| `plg.port`, `plg.path`, `plg.scheme`, `plg.job` | Detail scrape |
+| `plg.address=IP:PORT` | Alamat scrape eksplisit, mis. port yang di-publish bila jaringan container tidak terjangkau dari host (overlay Swarm) |
+
+Container yang tidak bisa diberi label bisa dikecualikan dengan
+`--exclude-containers REGEX`.
+
+### Mode offline
+
+Saat PLG Stack tidak bisa dihubungi (jaringan putus, stack sedang pindah, dll.),
+agent tetap mengumpulkan data:
+
+- **Metrik** disimpan di disk agent hingga `--offline-buffer` (default 24 jam).
+  Stack menerimanya selama `PROMETHEUS_OOO_WINDOW` (samakan atau lebihkan).
+- **Log** ditahan di sumbernya: journald, file log, dan log container. Agent
+  berhenti membaca saat antrean kirim penuh, lalu melanjutkan dari posisi
+  terakhir begitu terhubung. Batasnya rotasi log di server itu sendiri. Jika
+  agent di-restart saat offline, maksimal ±10 MB log terakhir di antrean memori
+  bisa hilang.
+- **Journald di disk** (ditawarkan installer) membuat log sebelum server mati
+  atau reboot tetap ada dan terkirim setelah server hidup lagi.
+
+Di Host Detail, panel **Keterlambatan kirim agent** menunjukkan periode
+terputus: saat jaringan putus, grafiknya naik lalu turun setelah backlog
+terkirim. Jika server mati, grafik kosong karena memang tidak ada data yang
+dikumpulkan.
+
+### Log pipeline
+
+Semua log melewati pipeline yang sama sebelum dikirim:
+
+- `--log-drop REGEX`: buang baris yang cocok (mis. log health check).
+- Multi-baris: stack trace digabung menjadi satu entri. Baris yang diawali spasi
+  dianggap lanjutan; ubah dengan `--multiline REGEX`.
+- Sensor rahasia: nilai password, token, secret, api key, header Authorization,
+  dan password di URL diganti `***`. Matikan dengan `--no-redact`.
 
 ## 3. Dashboard dan alert
 
 Dashboard di folder **PLG Stack**:
 
-- **Fleet Overview**: semua server dalam satu tabel (CPU, RAM, disk, uptime,
-  versi agent) dan daftar server yang berhenti mengirim data.
-- **Host Detail**: satu server lengkap dengan log journald.
-- **Containers**: pemakaian per service/container dan log container.
-- **Logs**: pencarian log lintas server.
+- **Fleet Overview**: semua server dalam satu tabel, server yang berhenti
+  mengirim data, dan nama server yang dipakai lebih dari satu mesin.
+- **Host Detail**: satu server lengkap, termasuk proses teratas, status koneksi
+  agent, dan log journald.
+- **Containers**: pemakaian per service/container dan log container per level.
+- **Logs**: pencarian log lintas server, filter per level.
 - **Databases**: PostgreSQL, MySQL/MariaDB, Redis, MongoDB.
+- **PLG Stack Health**: kesehatan komponen, ingest metrik dan log (termasuk
+  data yang ditolak), disk metrik vs batas, volume per server, dan status agent.
 
 Alert rules (folder **Alerts**): server tidak mengirim data, disk >85% / >95%,
 disk diprediksi penuh dalam 24 jam, RAM >90%, CPU >90%, container sering
@@ -187,28 +307,39 @@ Dashboard di-provision read-only. Edit di Grafana → *Save as* copy, atau
 4. Ubah DNS `grafana.*` dan `ingest.*` ke server baru.
 5. Matikan stack di server lama.
 
-Agent tidak perlu diubah. Kalau histori metrik tidak perlu ikut, langkah 1–3
-cukup diganti deploy baru. Jika Loki memakai S3, log memang tidak ada di disk
-lokal sehingga tidak perlu dipindah.
+Agent tidak perlu diubah; selama DNS berpindah, data ditahan oleh mode offline.
+Kalau histori metrik tidak perlu ikut, langkah 1–3 cukup diganti deploy baru.
 
 ## Keamanan
 
 - Yang terbuka ke luar hanya gateway (80/443). Prometheus dan Loki tidak
   di-expose; query lewat Grafana.
-- Endpoint ingest memakai basic auth (`INGEST_USER` / `INGEST_PASSWORD`) di atas
-  HTTPS. Ganti password = ubah `.env`, redeploy, lalu jalankan ulang installer di
-  setiap server.
-- Agent mode docker berjalan `--privileged` dengan akses read-only ke root
-  filesystem dan socket Docker (dibutuhkan cAdvisor dan metrik host). UI Alloy
-  hanya listen di `127.0.0.1:12345`.
-- File kredensial agent: `/opt/plg-agent/agent.env` (docker) atau
-  `/etc/alloy/plg.env` (native), keduanya mode `600`.
+- Setiap server punya token sendiri (`AGENT_TOKENS`). Token yang dicabut langsung
+  ditolak setelah gateway dimuat ulang.
+- Fitur snapshot eksternal Grafana (publikasi dashboard ke snapshots.raintank.io)
+  dimatikan.
+- Agent mode docker hanya berjalan `--privileged` bila modul yang dipilih
+  membutuhkannya; filesystem host selalu di-mount read-only. UI Alloy hanya
+  listen di `127.0.0.1:12345`.
+- File kredensial agent: `/etc/plg-agent/agent.env`, mode `600`.
+
+## Pengembangan
+
+```bash
+tests/run.sh
+```
+
+Test berjalan tanpa root, Docker, atau jaringan: parser katalog modul,
+penyimpanan konfigurasi agent, pemilihan modul, batas memori, token gateway,
+dan `agent-token.sh`.
 
 ## Troubleshooting
 
 | Gejala | Cek |
 |---|---|
-| Server tidak muncul di dashboard | `docker logs plg-agent` / `journalctl -u alloy`; `curl -u agent:PASS https://ingest.../ping` |
+| Server tidak muncul di dashboard | `docker logs plg-agent` / `journalctl -u alloy`; `curl -u NAMA:TOKEN https://ingest.../ping` |
+| Installer: token ditolak (401) | Nama server harus sama dengan nama token; cek `scripts/agent-token.sh list` |
 | Komponen agent tidak sehat | UI Alloy: `ssh -L 12345:127.0.0.1:12345 server`, lalu buka http://localhost:12345 |
 | Database `DOWN` | Kredensial DSN salah, atau user belum punya grant yang dibutuhkan |
-| Log file DB tidak masuk | Permission: agent native berjalan sebagai user `alloy` dengan grup `adm` dan `systemd-journal` |
+| File log tidak masuk (native) | Agent berjalan sebagai user `alloy` (grup `adm`, `systemd-journal`); beri izin baca, atau pilih modul `process` yang memberi akses baca penuh |
+| Log ditolak / `rate_limited` | Lihat PLG Stack Health → *Log ditolak Loki*; naikkan `LOKI_INGESTION_RATE_MB` atau kurangi log dengan `--log-drop` |
