@@ -92,6 +92,18 @@ discovery.relabel "docker_apps" {
 		target_label = "instance"
 		replacement  = sys.env("MONITORING_HOST")
 	}
+
+	// As target labels, an application's own host/env labels are renamed to
+	// exported_host/exported_env instead of hiding the agent's labels.
+	rule {
+		target_label = "host"
+		replacement  = sys.env("MONITORING_HOST")
+	}
+
+	rule {
+		target_label = "env"
+		replacement  = sys.env("MONITORING_ENV")
+	}
 }
 
 prometheus.scrape "docker_apps" {

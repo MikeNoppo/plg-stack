@@ -12,8 +12,24 @@ discovery.file "apps" {
 	refresh_interval = "1m"
 }
 
+// As target labels, an application's own host/env labels are renamed to
+// exported_host/exported_env instead of hiding the agent's labels.
+discovery.relabel "apps" {
+	targets = discovery.file.apps.targets
+
+	rule {
+		target_label = "host"
+		replacement  = sys.env("MONITORING_HOST")
+	}
+
+	rule {
+		target_label = "env"
+		replacement  = sys.env("MONITORING_ENV")
+	}
+}
+
 prometheus.scrape "native_apps" {
-	targets         = discovery.file.apps.targets
+	targets         = discovery.relabel.apps.output
 	forward_to      = [prometheus.remote_write.default.receiver]
 	scrape_interval = "30s"
 	sample_limit    = encoding.from_json(coalesce(sys.env("APP_METRICS_SAMPLE_LIMIT"), "10000"))
