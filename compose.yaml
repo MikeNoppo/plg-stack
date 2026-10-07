@@ -1,0 +1,95 @@
+name: monitoring
+
+services:
+  gateway:
+    image: caddy:${CADDY_VERSION:-2.11.7-alpine}
+    restart: unless-stopped
+    environment:
+      GATEWAY_SCHEME: ${GATEWAY_SCHEME:-https}
+      GRAFANA_DOMAIN: ${GRAFANA_DOMAIN:?set GRAFANA_DOMAIN}
+      INGEST_DOMAIN: ${INGEST_DOMAIN:?set INGEST_DOMAIN}
+      INGEST_USER: ${INGEST_USER:-agent}
+      INGEST_PASSWORD: ${INGEST_PASSWORD:?set INGEST_PASSWORD}
+    # Hashing at startup keeps a bcrypt hash (full of `$`) out of .env, where
+    # compose interpolation would silently mangle it.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        INGEST_PASSWORD_HASH="$$(printf '%s' "$$INGEST_PASSWORD" | caddy hash-password)" || exit 1
+        export INGEST_PASSWORD_HASH
+        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+    volumes:
+      - ./gateway/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./agent:/srv/agent:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - grafana
+      - prometheus
+      - loki
+
+  prometheus:
+    image: prom/prometheus:${PROMETHEUS_VERSION:-v3.15.0}
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}
+      - --storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-8GB}
+      - --web.enable-remote-write-receiver
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+
+  loki:
+    image: grafana/loki:${LOKI_VERSION:-3.7.8}
+    restart: unless-stopped
+    command:
+      - -config.file=/etc/loki/${LOKI_CONFIG:-loki.yaml}
+      - -config.expand-env=true
+    environment:
+      LOKI_RETENTION: ${LOKI_RETENTION:-14d}
+      LOKI_S3_BUCKET: ${LOKI_S3_BUCKET:-}
+      LOKI_S3_REGION: ${LOKI_S3_REGION:-}
+      LOKI_S3_ENDPOINT: ${LOKI_S3_ENDPOINT:-}
+      LOKI_S3_ACCESS_KEY_ID: ${LOKI_S3_ACCESS_KEY_ID:-}
+      LOKI_S3_SECRET_ACCESS_KEY: ${LOKI_S3_SECRET_ACCESS_KEY:-}
+      LOKI_S3_FORCE_PATH_STYLE: ${LOKI_S3_FORCE_PATH_STYLE:-false}
+    volumes:
+      - ./loki:/etc/loki:ro
+      - loki-data:/loki
+
+  grafana:
+    image: grafana/grafana:${GRAFANA_VERSION:-13.2.3}
+    restart: unless-stopped
+    environment:
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-https://${GRAFANA_DOMAIN}}
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_LOG_LEVEL: warn
+      GF_SMTP_ENABLED: ${GF_SMTP_ENABLED:-false}
+      GF_SMTP_HOST: ${GF_SMTP_HOST:-}
+      GF_SMTP_USER: ${GF_SMTP_USER:-}
+      GF_SMTP_PASSWORD: ${GF_SMTP_PASSWORD:-}
+      GF_SMTP_FROM_ADDRESS: ${GF_SMTP_FROM_ADDRESS:-}
+      ALERT_TELEGRAM_BOT_TOKEN: ${ALERT_TELEGRAM_BOT_TOKEN:-}
+      ALERT_TELEGRAM_CHAT_ID: ${ALERT_TELEGRAM_CHAT_ID:-}
+      ALERT_SLACK_WEBHOOK_URL: ${ALERT_SLACK_WEBHOOK_URL:-}
+      ALERT_EMAIL_ADDRESSES: ${ALERT_EMAIL_ADDRESSES:-}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - loki
+
+volumes:
+  caddy-data:
+  caddy-config:
+  prometheus-data:
+  loki-data:
+  grafana-data:

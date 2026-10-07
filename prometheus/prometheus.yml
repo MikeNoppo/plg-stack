@@ -1,0 +1,23 @@
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+storage:
+  tsdb:
+    # Agents replay their WAL after an outage or a stack move; accept those
+    # slightly old samples instead of rejecting them.
+    out_of_order_time_window: 1h
+
+scrape_configs:
+  - job_name: monitoring-prometheus
+    static_configs:
+      - targets: [localhost:9090]
+  - job_name: monitoring-loki
+    static_configs:
+      - targets: [loki:3100]
+  - job_name: monitoring-grafana
+    static_configs:
+      - targets: [grafana:3000]
+  - job_name: monitoring-gateway
+    static_configs:
+      - targets: [gateway:9180]

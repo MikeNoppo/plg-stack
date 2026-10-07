@@ -1,0 +1,40 @@
+{
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+{$GATEWAY_SCHEME}://{$GRAFANA_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy grafana:3000
+}
+
+{$GATEWAY_SCHEME}://{$INGEST_DOMAIN} {
+	# The installer and its modules hold no secrets, so servers can fetch them
+	# before they have credentials.
+	handle_path /agent/* {
+		root * /srv/agent
+		file_server
+	}
+
+	handle {
+		basic_auth {
+			{$INGEST_USER} {$INGEST_PASSWORD_HASH}
+		}
+
+		handle /ping {
+			respond "ok" 200
+		}
+		handle /api/v1/write {
+			reverse_proxy prometheus:9090
+		}
+		handle /loki/api/v1/push {
+			reverse_proxy loki:3100
+		}
+		respond 404
+	}
+}
+
+:9180 {
+	metrics
+}
