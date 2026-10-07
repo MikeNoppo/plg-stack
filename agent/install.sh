@@ -331,9 +331,11 @@ load_catalog() {
 }
 
 all_module_vars() {
-	local mod
+	local mod var
 	for mod in "${MODULE_ORDER[@]}"; do
-		printf '%s\n' ${M_VARS[$mod]}
+		for var in ${M_VARS[$mod]}; do
+			printf '%s\n' "$var"
+		done
 	done
 }
 
@@ -1058,10 +1060,12 @@ prepare_host() {
 }
 
 persisted_keys() {
-	local mod
+	local mod var
 	printf '%s\n' "${CORE_KEYS[@]}"
 	for mod in "${SELECTED[@]}"; do
-		printf '%s\n' ${M_VARS[$mod]}
+		for var in ${M_VARS[$mod]}; do
+			printf '%s\n' "$var"
+		done
 	done
 }
 

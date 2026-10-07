@@ -40,6 +40,14 @@ assert_fails "invalid variable names are rejected" bash -c "
 	parse_catalog '$TMP/bad.conf'
 " 2>/dev/null
 
+mapfile -t vars < <(all_module_vars)
+assert_eq 0 "$(printf '%s\n' "${vars[@]}" | grep -cx '')" "module variable list has no empty entries"
+assert_contains " ${vars[*]} " " POSTGRES_DSN " "module variables are listed"
+SELECTED=(base docker-logs postgres)
+mapfile -t keys < <(persisted_keys)
+assert_eq 0 "$(printf '%s\n' "${keys[@]}" | grep -cx '')" "persisted keys have no empty entries"
+assert_contains " ${keys[*]} " " POSTGRES_DSN " "selected module variables are persisted"
+
 # --- module selection ------------------------------------------------------------
 
 HAS_DOCKER=0
