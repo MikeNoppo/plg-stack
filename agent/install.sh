@@ -246,8 +246,11 @@ detect_existing() {
 
 # Values given on the command line win over the ones from a previous install.
 load_env_file() {
-	local key value
-	while IFS='=' read -r key value; do
+	local line key value
+	while IFS= read -r line; do
+		[[ "$line" == *=* ]] || continue
+		key="${line%%=*}"
+		value="${line#*=}"
 		[[ "$key" =~ ^(MONITORING_(URL|USER|PASSWORD|HOST|ENV)|POSTGRES_DSN|MYSQL_DSN|REDIS_ADDR|REDIS_PASSWORD|MONGODB_URI)$ ]] || continue
 		if [[ "$value" == \"*\" ]]; then
 			value="${value:1:${#value}-2}"
