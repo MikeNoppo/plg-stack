@@ -127,6 +127,49 @@ assert_contains "$(cat "$TMP/auto.yaml")" 'service: "app"' "service label is wri
 write_log_targets "$TMP/empty.yaml"
 assert_contains "$(cat "$TMP/empty.yaml")" "[]" "no targets is still a valid YAML list"
 
+# --- docker mode: root mount fallback --------------------------------------------
+
+DOCKER_RUNS="$TMP/docker-runs"
+docker() {
+	case "$1" in
+	run)
+		printf '%s\n' "$*" >>"$DOCKER_RUNS"
+		if [[ "$*" == *rslave* && "${DOCKER_FAIL:-}" == propagation ]]; then
+			echo "docker: Error response from daemon: path / is mounted on / but it is not a shared or slave mount" >&2
+			return 125
+		fi
+		if [[ "${DOCKER_FAIL:-}" == other ]]; then
+			echo "docker: Error response from daemon: conflict" >&2
+			return 125
+		fi
+		echo container-id
+		;;
+	esac
+}
+
+(
+	ENV_FILE="$TMP/agent.env" MODULE_DIR="$TMP/modules" SELECTED=(base)
+	PRIVILEGED=0 AGENT_MEMORY_LIMIT=512M AGENT_LOG_MAX_SIZE=10m DOCKER_FAIL=propagation
+	: >"$DOCKER_RUNS"
+	install_docker >/dev/null 2>"$TMP/stderr"
+	assert_eq 2 "$(wc -l <"$DOCKER_RUNS")" "a refused rslave mount is retried once"
+	assert_contains "$(sed -n 1p "$DOCKER_RUNS")" "-v /:/host/root:ro,rslave" "rslave is tried first"
+	assert_contains "$(sed -n 2p "$DOCKER_RUNS")" "-v /:/host/root:ro " "the retry mounts / without propagation"
+	assert_contains "$(cat "$TMP/stderr")" "bukan shared mount" "the fallback is explained"
+	assert_contains "$(sed -n 1p "$DOCKER_RUNS")" "--memory 512m" "the memory limit is passed in Docker's format"
+	assert_fails "privileged is off unless a module needs it" grep -q -- --privileged "$DOCKER_RUNS"
+	exit "$FAILURES"
+) || FAILURES=$((FAILURES + $?))
+
+(
+	ENV_FILE="$TMP/agent.env" MODULE_DIR="$TMP/modules" SELECTED=(base)
+	PRIVILEGED=0 AGENT_MEMORY_LIMIT=0 AGENT_LOG_MAX_SIZE=10m DOCKER_FAIL=other
+	: >"$DOCKER_RUNS"
+	install_docker >/dev/null 2>&1
+) && FAILURES=$((FAILURES + 1)) && echo "FAIL: other docker run errors must abort" >&2
+assert_eq 1 "$(wc -l <"$DOCKER_RUNS")" "other errors are not retried"
+unset -f docker
+
 # --- labels ---------------------------------------------------------------------
 
 assert_ok "plain names are valid" valid_label db-01.prod_a

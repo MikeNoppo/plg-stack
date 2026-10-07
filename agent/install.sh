@@ -1084,7 +1084,6 @@ install_docker() {
 	[[ "$AGENT_MEMORY_LIMIT" != 0 ]] && flags+=(--memory "${AGENT_MEMORY_LIMIT,,}")
 
 	local mounts=(
-		-v /:/host/root:ro,rslave
 		-v /proc:/host/proc:ro
 		-v /sys:/host/sys:ro
 		-v "$MODULE_DIR:/etc/alloy/plg:ro"
@@ -1097,15 +1096,28 @@ install_docker() {
 		[[ -e "$path" ]] && mounts+=(-v "$path:$path:ro")
 	done
 
+	# rslave lets disks mounted later show up in the agent, but Docker refuses
+	# it when / is not a shared mount (e.g. Docker Desktop, some containers).
+	local err
+	if ! err="$(run_agent_container -v /:/host/root:ro,rslave 2>&1 >/dev/null)"; then
+		[[ "$err" == *"not a shared or slave mount"* ]] || die "Gagal menjalankan container agent: $err"
+		warn "/ bukan shared mount; disk yang di-mount setelah ini baru terlihat setelah agent di-restart."
+		docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+		err="$(run_agent_container -v /:/host/root:ro 2>&1 >/dev/null)" || die "Gagal menjalankan container agent: $err"
+	fi
+	ok "Container $CONTAINER_NAME berjalan."
+}
+
+# Uses flags and mounts from install_docker; extra arguments add the root mount.
+run_agent_container() {
 	docker run -d --name "$CONTAINER_NAME" --restart unless-stopped \
 		"${flags[@]}" \
 		--env-file "$ENV_FILE" \
 		--label com.plg-stack.agent=true \
+		"$@" \
 		"${mounts[@]}" \
 		"grafana/alloy:$ALLOY_VERSION" \
-		run --server.http.listen-addr="$ALLOY_HTTP" --storage.path=/var/lib/alloy/data /etc/alloy/plg \
-		>/dev/null
-	ok "Container $CONTAINER_NAME berjalan."
+		run --server.http.listen-addr="$ALLOY_HTTP" --storage.path=/var/lib/alloy/data /etc/alloy/plg
 }
 
 install_alloy_package() {
