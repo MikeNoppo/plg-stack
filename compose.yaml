@@ -154,6 +154,19 @@ services:
       - prometheus
       - loki
 
+  watchdog:
+    image: alpine:${ALPINE_VERSION:-3.24}
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: 32m
+    environment:
+      WATCHDOG_URL: ${WATCHDOG_URL:-}
+      WATCHDOG_FAIL_URL: ${WATCHDOG_FAIL_URL:-}
+      WATCHDOG_INTERVAL: ${WATCHDOG_INTERVAL:-60}
+    command: ["/bin/sh", "/watchdog.sh"]
+    volumes:
+      - ./watchdog/watchdog.sh:/watchdog.sh:ro
+
 networks:
   default: {}
 
