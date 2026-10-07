@@ -1,4 +1,3 @@
-// Required by every server: shipping targets, host metrics, journald logs.
 // Settings come from the environment written by install.sh:
 //   MONITORING_URL, MONITORING_USER, MONITORING_PASSWORD, MONITORING_HOST, MONITORING_ENV
 //   HOST_PROC, HOST_SYS, HOST_ROOT (only when Alloy runs in a container)

@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Archives the stack's Docker volumes so they can be restored on another
-# server with scripts/restore.sh.
-#
 #   scripts/backup.sh [--project NAME] [--no-stop] [OUTPUT_DIR]
 set -euo pipefail
 
@@ -14,7 +11,7 @@ while (($#)); do
 	case "$1" in
 	--project) PROJECT="${2:?--project butuh nilai}" && shift ;;
 	--no-stop) STOP=0 ;;
-	-h | --help) sed -n '2,6p' "$0" && exit 0 ;;
+	-h | --help) sed -n '2p' "$0" && exit 0 ;;
 	*) OUT="$1" ;;
 	esac
 	shift

@@ -1,4 +1,3 @@
-// Docker hosts: per-container metrics (cAdvisor) and container logs.
 // `service` is the Swarm service (Dokploy applications), else the compose
 // service, else the container name, so dashboards work for all three.
 

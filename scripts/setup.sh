@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Interactively writes .env for this stack and prints the next steps.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
