@@ -17,16 +17,10 @@ services:
       GATEWAY_SCHEME: ${GATEWAY_SCHEME:-https}
       GRAFANA_DOMAIN: ${GRAFANA_DOMAIN:?set GRAFANA_DOMAIN}
       INGEST_DOMAIN: ${INGEST_DOMAIN:?set INGEST_DOMAIN}
-      INGEST_USER: ${INGEST_USER:-agent}
-      INGEST_PASSWORD: ${INGEST_PASSWORD:?set INGEST_PASSWORD}
-    # Hashing at startup keeps a bcrypt hash (full of `$`) out of .env, where
-    # compose interpolation would silently mangle it.
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        INGEST_PASSWORD_HASH="$$(printf '%s' "$$INGEST_PASSWORD" | caddy hash-password)" || exit 1
-        export INGEST_PASSWORD_HASH
-        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+      AGENT_TOKENS: ${AGENT_TOKENS:-}
+      SELF_MONITORING_NAME: ${SELF_MONITORING_NAME:-plg-stack}
+      SELF_MONITORING_TOKEN: ${SELF_MONITORING_TOKEN:-}
+    entrypoint: ["/bin/sh", "/etc/caddy/entrypoint.sh"]
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9180/metrics"]
       interval: 30s
@@ -34,6 +28,7 @@ services:
       retries: 3
     volumes:
       - ./gateway/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./gateway/entrypoint.sh:/etc/caddy/entrypoint.sh:ro
       - ./agent:/srv/agent:ro
       - caddy-data:/data
       - caddy-config:/config
