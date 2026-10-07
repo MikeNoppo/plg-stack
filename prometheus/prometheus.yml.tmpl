@@ -1,12 +1,15 @@
+# Rendered at startup by compose.yaml, which fills the __NAME__ placeholders.
+
 global:
   scrape_interval: 30s
   evaluation_interval: 30s
 
 storage:
   tsdb:
-    # Agents replay their WAL after an outage or a stack move; accept those
-    # slightly old samples instead of rejecting them.
-    out_of_order_time_window: 1h
+    # Agents replay their buffered samples after an outage; accept samples
+    # up to this old instead of rejecting them. Keep it at least as long as
+    # the agents' offline buffer (AGENT_OFFLINE_BUFFER).
+    out_of_order_time_window: __OOO_WINDOW__
 
 scrape_configs:
   - job_name: plg-prometheus
