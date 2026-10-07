@@ -23,7 +23,8 @@ dipindah antar server tanpa menyentuh agent di server-server yang dipantau.
 Prinsip yang membuat stack ini mudah dipindah:
 
 - **Agent mengirim ke hostname, bukan IP.** Saat stack pindah, cukup ubah DNS
-  `ingest.*` dan `grafana.*`. Agent mem-buffer data (WAL) selama DNS berpindah.
+  `ingest.*` dan `grafana.*`. Metrik di-buffer agent (WAL) selama DNS berpindah;
+  log hanya dicoba ulang sekitar 5 menit, jadi jaga jeda perpindahan tetap singkat.
 - **Semua konfigurasi ada di git.** Datasource, dashboard, dan alert di-provision
   dari file, jadi database Grafana tidak menyimpan apa pun yang penting.
 - **Satu `compose.yaml` untuk dua mode.** TLS diurus Traefik di Dokploy, atau
