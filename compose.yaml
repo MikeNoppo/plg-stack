@@ -184,6 +184,7 @@ services:
       HOST_PROC: /host/proc
       HOST_SYS: /host/sys
       HOST_ROOT: /host/root
+      TEXTFILE_DIR: /textfile
     command:
       - run
       - --server.http.listen-addr=127.0.0.1:12346
@@ -197,6 +198,7 @@ services:
       # cAdvisor reads container details through containerd.
       - /run/containerd:/run/containerd:ro
       - /var/lib/docker:/var/lib/docker:ro
+      - /var/lib/plg-agent/textfile:/textfile:ro
       - /var/log/journal:/var/log/journal:ro
       - /run/log/journal:/run/log/journal:ro
       - /etc/machine-id:/etc/machine-id:ro

@@ -4,6 +4,7 @@
 //   AGENT_OFFLINE_BUFFER    how long metrics are kept while the stack is unreachable
 //   LOG_DROP_REGEX, LOG_REDACT_REGEX, LOG_MULTILINE_FIRSTLINE
 //   HOST_PROC, HOST_SYS, HOST_ROOT (only when Alloy runs in a container)
+//   TEXTFILE_DIR (optional, overrides the custom metrics directory)
 // Every module sends its logs to loki.process.pipeline.
 
 logging {
@@ -168,7 +169,7 @@ prometheus.exporter.unix "host" {
 
 	// Custom metrics: any script can drop a *.prom file here.
 	textfile {
-		directory = string.format("%s/var/lib/plg-agent/textfile", sys.env("HOST_ROOT"))
+		directory = coalesce(sys.env("TEXTFILE_DIR"), string.format("%s/var/lib/plg-agent/textfile", sys.env("HOST_ROOT")))
 	}
 }
 
