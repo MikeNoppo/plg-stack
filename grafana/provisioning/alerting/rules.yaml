@@ -1,0 +1,245 @@
+# Annotations use `.Labels` instead of `$labels`: Grafana expands `$VAR`
+# environment references inside provisioning files.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: hosts
+    folder: Alerts
+    interval: 1m
+    rules:
+      - uid: host-not-reporting
+        title: Server tidak mengirim data
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              # Hosts seen in the last 24h but silent for 3m. A host that is
+              # retired on purpose stops alerting after 24h.
+              expr: |
+                group by (host, env) (max_over_time(up{job="node"}[24h]))
+                unless
+                group by (host, env) (max_over_time(up{job="node"}[3m]))
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        for: 2m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: critical }
+        annotations:
+          summary: 'Server {{ .Labels.host }} ({{ .Labels.env }}) tidak mengirim data lebih dari 5 menit'
+          description: Server mati, jaringan putus, atau agent berhenti. Cek `systemctl status alloy` atau `docker logs monitoring-agent`.
+
+      - uid: disk-usage-high
+        title: Disk hampir penuh
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 100 * (1 - node_filesystem_avail_bytes{job="node"} / node_filesystem_size_bytes{job="node"})
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [85] }
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: warning }
+        annotations:
+          summary: 'Disk {{ .Labels.mountpoint }} di {{ .Labels.host }} terpakai {{ printf "%.0f" .Values.A.Value }}%'
+
+      - uid: disk-usage-critical
+        title: Disk kritis
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 100 * (1 - node_filesystem_avail_bytes{job="node"} / node_filesystem_size_bytes{job="node"})
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [95] }
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: critical }
+        annotations:
+          summary: 'Disk {{ .Labels.mountpoint }} di {{ .Labels.host }} terpakai {{ printf "%.0f" .Values.A.Value }}%'
+
+      - uid: disk-fill-24h
+        title: Disk diprediksi penuh dalam 24 jam
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 21600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: |
+                predict_linear(node_filesystem_avail_bytes{job="node"}[6h], 86400) < 0
+                and
+                100 * (1 - node_filesystem_avail_bytes{job="node"} / node_filesystem_size_bytes{job="node"}) > 70
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [0] }
+        for: 30m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: warning }
+        annotations:
+          summary: 'Disk {{ .Labels.mountpoint }} di {{ .Labels.host }} diprediksi penuh dalam 24 jam'
+
+      - uid: memory-high
+        title: RAM hampir habis
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 100 * (1 - node_memory_MemAvailable_bytes{job="node"} / node_memory_MemTotal_bytes{job="node"})
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [90] }
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: warning }
+        annotations:
+          summary: 'RAM {{ .Labels.host }} terpakai {{ printf "%.0f" .Values.A.Value }}%'
+
+      - uid: cpu-high
+        title: CPU tinggi
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 100 * (1 - avg by (host, env) (rate(node_cpu_seconds_total{job="node", mode="idle"}[5m])))
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [90] }
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: warning }
+        annotations:
+          summary: 'CPU {{ .Labels.host }} {{ printf "%.0f" .Values.A.Value }}% selama 15 menit'
+
+  - orgId: 1
+    name: containers
+    folder: Alerts
+    interval: 1m
+    rules:
+      - uid: container-restarting
+        title: Container sering restart
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              # Compose restarts keep the container name (start time changes);
+              # Swarm/Dokploy replaces the container (a new series appears).
+              expr: |
+                sum by (host, env, service) (changes(container_start_time_seconds{job="cadvisor"}[15m]))
+                +
+                (
+                  count by (host, env, service) (count_over_time(container_start_time_seconds{job="cadvisor"}[15m]))
+                  - count by (host, env, service) (container_start_time_seconds{job="cadvisor"})
+                )
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [2] }
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: warning }
+        annotations:
+          summary: 'Service {{ .Labels.service }} di {{ .Labels.host }} restart {{ printf "%.0f" .Values.A.Value }}x dalam 15 menit'
+
+  - orgId: 1
+    name: databases
+    folder: Alerts
+    interval: 1m
+    rules:
+      - uid: database-down
+        title: Database tidak bisa diakses
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: min by (host, env, job) ({__name__=~"pg_up|mysql_up|redis_up|mongodb_up"})
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+        for: 2m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: critical }
+        annotations:
+          summary: 'Database {{ .Labels.job }} di {{ .Labels.host }} tidak bisa diakses agent'
+          description: Database mati, atau kredensial monitoring di agent salah.

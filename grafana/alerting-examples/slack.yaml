@@ -1,0 +1,21 @@
+# Copy to grafana/provisioning/alerting/ and set ALERT_SLACK_WEBHOOK_URL in
+# .env. Use only one example: each one replaces the whole notification policy
+# tree.
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: slack
+    receivers:
+      - uid: slack
+        type: slack
+        settings:
+          url: ${ALERT_SLACK_WEBHOOK_URL}
+
+policies:
+  - orgId: 1
+    receiver: slack
+    group_by: [grafana_folder, alertname, host]
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h
