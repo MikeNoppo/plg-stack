@@ -71,48 +71,72 @@ loki.process "pipeline" {
 			max_wait_time = "3s"
 			max_lines     = 500
 		}
-	}
 
-	// Level detection for application logs: a level key in JSON or logfmt,
-	// a pino numeric level, or an upper-case level word / [level] in the
-	// first 80 characters. Ordered by severity so the most severe match wins.
-	stage.match {
-		selector = "{source=~\"docker|file\"} |~ `(?i:\"(?:level|lvl|severity|loglevel|log_level)\"\\s*:\\s*\"(?:debug|trace|dbg)\")|(?i:\\b(?:level|lvl|severity)=(?:debug|trace|dbg)\\b)|\"level\"\\s*:\\s*[12]0\\b|^.{0,80}?(?:\\b(?:DEBUG|TRACE|DBG|TRC)\\b|\\[(?:debug|trace)\\])`"
-
-		stage.static_labels {
-			values = {level = "debug"}
+		// Level detection for application logs. Later stages overwrite `lvl`,
+		// so the most reliable source wins: JSON key > logfmt key > [level] or
+		// an upper-case level word in the first 80 characters.
+		stage.regex {
+			expression = "^.{0,80}?\\b(?P<lvl>EMERG|ALERT|CRITICAL|CRIT|FATAL|PANIC|ERROR|ERR|WARNING|WARN|NOTICE|INFO|DEBUG|TRACE|FTL|PNC|WRN|INF|DBG|TRC)\\b"
 		}
-	}
 
-	stage.match {
-		selector = "{source=~\"docker|file\"} |~ `(?i:\"(?:level|lvl|severity|loglevel|log_level)\"\\s*:\\s*\"(?:info|notice|inf)\")|(?i:\\b(?:level|lvl|severity)=(?:info|notice|inf)\\b)|\"level\"\\s*:\\s*30\\b|^.{0,80}?(?:\\b(?:INFO|NOTICE|INF)\\b|\\[(?:info|notice)\\])`"
-
-		stage.static_labels {
-			values = {level = "info"}
+		stage.regex {
+			expression = "^.{0,80}?\\[(?P<lvl>emerg|alert|crit|error|warn|warning|notice|info|debug)\\]"
 		}
-	}
 
-	stage.match {
-		selector = "{source=~\"docker|file\"} |~ `(?i:\"(?:level|lvl|severity|loglevel|log_level)\"\\s*:\\s*\"(?:warn|warning|wrn)\")|(?i:\\b(?:level|lvl|severity)=(?:warn|warning|wrn)\\b)|\"level\"\\s*:\\s*40\\b|^.{0,80}?(?:\\b(?:WARN|WARNING|WRN)\\b|\\[(?:warn|warning)\\])`"
-
-		stage.static_labels {
-			values = {level = "warning"}
+		stage.regex {
+			expression = "(?i)\\b(?:level|lvl|severity)=\"?(?P<lvl>[a-z]+)"
 		}
-	}
 
-	stage.match {
-		selector = "{source=~\"docker|file\"} |~ `(?i:\"(?:level|lvl|severity|loglevel|log_level)\"\\s*:\\s*\"(?:error|err)\")|(?i:\\b(?:level|lvl|severity)=(?:error|err)\\b)|\"level\"\\s*:\\s*50\\b|^.{0,80}?(?:\\b(?:ERROR|ERR)\\b|\\[(?:error|err)\\])`"
-
-		stage.static_labels {
-			values = {level = "error"}
+		stage.regex {
+			expression = "(?i)\"(?:level|lvl|severity|loglevel|log_level)\"\\s*:\\s*\"?(?P<lvl>[a-z]+|[1-6]0)\\b"
 		}
-	}
 
-	stage.match {
-		selector = "{source=~\"docker|file\"} |~ `(?i:\"(?:level|lvl|severity|loglevel|log_level)\"\\s*:\\s*\"(?:critical|crit|fatal|panic|emerg|emergency|alert)\")|(?i:\\b(?:level|lvl|severity)=(?:critical|crit|fatal|panic|emerg|alert)\\b)|\"level\"\\s*:\\s*60\\b|^.{0,80}?(?:\\b(?:CRITICAL|CRIT|FATAL|PANIC|EMERG|ALERT|FTL|PNC)\\b|\\[(?:crit|alert|emerg)\\])`"
+		stage.labels {
+			values = {level_raw = "lvl"}
+		}
 
-		stage.static_labels {
-			values = {level = "crit"}
+		stage.match {
+			selector = "{level_raw=~\"(?i)debug|trace|dbg|trc|10|20\"}"
+
+			stage.static_labels {
+				values = {level = "debug"}
+			}
+		}
+
+		stage.match {
+			selector = "{level_raw=~\"(?i)info|inf|notice|30\"}"
+
+			stage.static_labels {
+				values = {level = "info"}
+			}
+		}
+
+		stage.match {
+			selector = "{level_raw=~\"(?i)warn|warning|wrn|40\"}"
+
+			stage.static_labels {
+				values = {level = "warning"}
+			}
+		}
+
+		stage.match {
+			selector = "{level_raw=~\"(?i)error|err|50\"}"
+
+			stage.static_labels {
+				values = {level = "error"}
+			}
+		}
+
+		stage.match {
+			selector = "{level_raw=~\"(?i)crit|critical|fatal|panic|emerg|emergency|alert|ftl|pnc|60\"}"
+
+			stage.static_labels {
+				values = {level = "crit"}
+			}
+		}
+
+		stage.label_drop {
+			values = ["level_raw"]
 		}
 	}
 
