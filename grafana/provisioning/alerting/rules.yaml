@@ -190,13 +190,18 @@ groups:
               instant: true
               # Compose restarts keep the container name (start time changes);
               # Swarm/Dokploy replaces the container (a new series appears).
+              # Dividing by running replicas keeps a rolling redeploy, which
+              # replaces each replica once, under the threshold.
               expr: |
-                sum by (host, env, service) (changes(container_start_time_seconds{job="cadvisor"}[15m]))
-                +
                 (
-                  count by (host, env, service) (count_over_time(container_start_time_seconds{job="cadvisor"}[15m]))
-                  - count by (host, env, service) (container_start_time_seconds{job="cadvisor"})
+                  sum by (host, env, service) (changes(container_start_time_seconds{job="cadvisor"}[15m]))
+                  +
+                  (
+                    count by (host, env, service) (count_over_time(container_start_time_seconds{job="cadvisor"}[15m]))
+                    - count by (host, env, service) (container_start_time_seconds{job="cadvisor"})
+                  )
                 )
+                / count by (host, env, service) (container_start_time_seconds{job="cadvisor"})
           - refId: C
             datasourceUid: __expr__
             model:
@@ -210,7 +215,7 @@ groups:
         execErrState: Error
         labels: { severity: warning }
         annotations:
-          summary: 'Service {{ .Labels.service }} di {{ .Labels.host }} restart {{ printf "%.0f" .Values.A.Value }}x dalam 15 menit'
+          summary: 'Service {{ .Labels.service }} di {{ .Labels.host }} restart rata-rata {{ printf "%.1f" .Values.A.Value }}x per replika dalam 15 menit'
 
   - orgId: 1
     name: databases
