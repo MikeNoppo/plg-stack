@@ -23,6 +23,10 @@ services:
       - ./agent:/srv/agent:ro
       - caddy-data:/data
       - caddy-config:/config
+    # Dokploy appends dokploy-network when a domain is attached; listing
+    # default keeps the gateway able to reach the other services.
+    networks:
+      - default
     depends_on:
       - grafana
       - prometheus
@@ -86,6 +90,9 @@ services:
     depends_on:
       - prometheus
       - loki
+
+networks:
+  default: {}
 
 volumes:
   caddy-data:
