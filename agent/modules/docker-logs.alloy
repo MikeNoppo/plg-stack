@@ -1,0 +1,77 @@
+// `service` is the Swarm service, else the compose service, else the
+// container name. Per container, Docker labels override the defaults:
+//   plg.logs=false   do not ship this container's logs
+//   plg.service=NAME use NAME as the service label
+// LOG_EXCLUDE_CONTAINERS (regex on the container name) excludes containers
+// that cannot be relabelled.
+
+discovery.docker "logs" {
+	host             = "unix:///var/run/docker.sock"
+	refresh_interval = "30s"
+}
+
+discovery.relabel "docker_logs" {
+	targets = discovery.docker.logs.targets
+
+	rule {
+		source_labels = ["__meta_docker_container_label_plg_logs"]
+		regex         = "false"
+		action        = "drop"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.*)"
+		target_label  = "container"
+	}
+
+	rule {
+		source_labels = ["container"]
+		regex         = coalesce(sys.env("LOG_EXCLUDE_CONTAINERS"), "[^\\s\\S]")
+		action        = "drop"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+		target_label  = "compose_project"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service", "__meta_docker_container_label_com_docker_swarm_service_name"]
+		separator     = ";"
+		regex         = "([^;]*);(.*)"
+		target_label  = "service"
+		replacement   = "$1$2"
+	}
+
+	rule {
+		source_labels = ["service", "container"]
+		separator     = ";"
+		regex         = ";(.*)"
+		target_label  = "service"
+		replacement   = "$1"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_plg_service"]
+		regex         = "(.+)"
+		target_label  = "service"
+	}
+}
+
+loki.relabel "docker_logs" {
+	forward_to = []
+
+	rule {
+		source_labels = ["__meta_docker_container_log_stream"]
+		target_label  = "stream"
+	}
+}
+
+loki.source.docker "containers" {
+	host          = "unix:///var/run/docker.sock"
+	targets       = discovery.relabel.docker_logs.output
+	labels        = {source = "docker"}
+	relabel_rules = loki.relabel.docker_logs.rules
+	forward_to    = [loki.process.pipeline.receiver]
+}

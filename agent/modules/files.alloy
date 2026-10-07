@@ -1,0 +1,38 @@
+// Ships log files listed in /etc/plg-agent/logs.d/*.yaml. install.sh writes
+// auto.yaml from what it detects; add more files there or in another *.yaml
+// file and they are picked up without restarting the agent:
+//   - targets: [localhost]
+//     labels:
+//       __path__: /var/www/app/storage/logs/*.log
+//       service: laravel
+
+discovery.file "logs" {
+	files            = [string.format("%s/etc/plg-agent/logs.d/*.yaml", sys.env("HOST_ROOT"))]
+	refresh_interval = "1m"
+}
+
+discovery.relabel "files" {
+	targets = discovery.file.logs.targets
+
+	// Paths are written as seen on the host; in container mode the host's
+	// root filesystem is mounted under HOST_ROOT.
+	rule {
+		source_labels = ["__path__"]
+		target_label  = "__path__"
+		replacement   = string.format("%s$1", sys.env("HOST_ROOT"))
+	}
+
+	rule {
+		target_label = "source"
+		replacement  = "file"
+	}
+}
+
+local.file_match "files" {
+	path_targets = discovery.relabel.files.output
+}
+
+loki.source.file "files" {
+	targets    = local.file_match.files.targets
+	forward_to = [loki.process.pipeline.receiver]
+}

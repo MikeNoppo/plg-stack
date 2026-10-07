@@ -1,0 +1,31 @@
+// CPU, memory and I/O per process name. PROCESS_NAMES is a comma-separated
+// list of executable names as shown by `ps -eo comm` (max 15 characters).
+
+prometheus.exporter.process "processes" {
+	procfs_path = coalesce(sys.env("HOST_PROC"), "/proc")
+
+	matcher {
+		name = "{{.Comm}}"
+		comm = string.split(coalesce(sys.env("PROCESS_NAMES"), "alloy"), ",")
+	}
+}
+
+discovery.relabel "process" {
+	targets = prometheus.exporter.process.processes.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "process"
+	}
+
+	rule {
+		target_label = "instance"
+		replacement  = sys.env("MONITORING_HOST")
+	}
+}
+
+prometheus.scrape "process" {
+	targets         = discovery.relabel.process.output
+	forward_to      = [prometheus.remote_write.default.receiver]
+	scrape_interval = "30s"
+}

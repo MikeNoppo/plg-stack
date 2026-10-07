@@ -1,5 +1,6 @@
-// `service` is the Swarm service (Dokploy applications), else the compose
-// service, else the container name, so dashboards work for all three.
+// `service` follows the same rules as docker-logs. Docker labels:
+//   plg.metrics=false  do not collect this container's metrics
+//   plg.service=NAME   use NAME as the service label
 
 prometheus.exporter.cadvisor "containers" {
 	docker_host            = "unix:///var/run/docker.sock"
@@ -11,6 +12,8 @@ prometheus.exporter.cadvisor "containers" {
 		"com.docker.compose.project",
 		"com.docker.compose.service",
 		"com.docker.swarm.service.name",
+		"plg.metrics",
+		"plg.service",
 	]
 }
 
@@ -50,6 +53,12 @@ prometheus.relabel "cadvisor" {
 	}
 
 	rule {
+		source_labels = ["container_label_plg_metrics"]
+		regex         = "false"
+		action        = "drop"
+	}
+
+	rule {
 		source_labels = ["name"]
 		target_label  = "container"
 	}
@@ -76,60 +85,13 @@ prometheus.relabel "cadvisor" {
 	}
 
 	rule {
+		source_labels = ["container_label_plg_service"]
+		regex         = "(.+)"
+		target_label  = "service"
+	}
+
+	rule {
 		regex  = "container_label_.*|name|id"
 		action = "labeldrop"
 	}
-}
-
-discovery.docker "containers" {
-	host             = "unix:///var/run/docker.sock"
-	refresh_interval = "30s"
-}
-
-discovery.relabel "docker_logs" {
-	targets = discovery.docker.containers.targets
-
-	rule {
-		source_labels = ["__meta_docker_container_name"]
-		regex         = "/(.*)"
-		target_label  = "container"
-	}
-
-	rule {
-		source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
-		target_label  = "compose_project"
-	}
-
-	rule {
-		source_labels = ["__meta_docker_container_label_com_docker_compose_service", "__meta_docker_container_label_com_docker_swarm_service_name"]
-		separator     = ";"
-		regex         = "([^;]*);(.*)"
-		target_label  = "service"
-		replacement   = "$1$2"
-	}
-
-	rule {
-		source_labels = ["service", "container"]
-		separator     = ";"
-		regex         = ";(.*)"
-		target_label  = "service"
-		replacement   = "$1"
-	}
-}
-
-loki.relabel "docker_logs" {
-	forward_to = []
-
-	rule {
-		source_labels = ["__meta_docker_container_log_stream"]
-		target_label  = "stream"
-	}
-}
-
-loki.source.docker "containers" {
-	host          = "unix:///var/run/docker.sock"
-	targets       = discovery.relabel.docker_logs.output
-	labels        = {source = "docker"}
-	relabel_rules = loki.relabel.docker_logs.rules
-	forward_to    = [loki.process.pipeline.receiver]
 }

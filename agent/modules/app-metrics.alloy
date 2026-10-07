@@ -1,0 +1,20 @@
+// Scrapes /metrics from applications running directly on the machine.
+// Targets live in /etc/plg-agent/metrics.d/*.yaml and are picked up without
+// restarting the agent, e.g.:
+//   - targets: ["127.0.0.1:9100"]
+//     labels:
+//       job: my-app
+//       __metrics_path__: /metrics
+// APP_METRICS_SAMPLE_LIMIT caps the series per scrape (default 10000).
+
+discovery.file "apps" {
+	files            = [string.format("%s/etc/plg-agent/metrics.d/*.yaml", sys.env("HOST_ROOT"))]
+	refresh_interval = "1m"
+}
+
+prometheus.scrape "native_apps" {
+	targets         = discovery.file.apps.targets
+	forward_to      = [prometheus.remote_write.default.receiver]
+	scrape_interval = "30s"
+	sample_limit    = encoding.from_json(coalesce(sys.env("APP_METRICS_SAMPLE_LIMIT"), "10000"))
+}

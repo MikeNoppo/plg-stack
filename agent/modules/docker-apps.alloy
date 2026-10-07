@@ -1,0 +1,102 @@
+// Scrapes /metrics from containers that opt in with Docker labels:
+//   plg.scrape=true      required
+//   plg.port=8080        port inside the container (default: the exposed port)
+//   plg.path=/metrics    metrics path
+//   plg.scheme=https     http (default) or https
+//   plg.address=IP:PORT  explicit address, e.g. a published port when the
+//                        container network isn't reachable from the host
+//                        (Swarm overlay networks)
+//   plg.job=NAME         job label (default: the service name)
+// APP_METRICS_SAMPLE_LIMIT caps the series per scrape (default 10000).
+
+discovery.docker "apps" {
+	host             = "unix:///var/run/docker.sock"
+	refresh_interval = "30s"
+}
+
+discovery.relabel "docker_apps" {
+	targets = discovery.docker.apps.targets
+
+	rule {
+		source_labels = ["__meta_docker_container_label_plg_scrape"]
+		regex         = "true"
+		action        = "keep"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_network_ip", "__meta_docker_container_label_plg_port"]
+		separator     = ";"
+		regex         = "(.+);(\\d+)"
+		target_label  = "__address__"
+		replacement   = "$1:$2"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_plg_address"]
+		regex         = "(.+)"
+		target_label  = "__address__"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_plg_path"]
+		regex         = "(.+)"
+		target_label  = "__metrics_path__"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_plg_scheme"]
+		regex         = "(https?)"
+		target_label  = "__scheme__"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.*)"
+		target_label  = "container"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service", "__meta_docker_container_label_com_docker_swarm_service_name"]
+		separator     = ";"
+		regex         = "([^;]*);(.*)"
+		target_label  = "service"
+		replacement   = "$1$2"
+	}
+
+	rule {
+		source_labels = ["service", "container"]
+		separator     = ";"
+		regex         = ";(.*)"
+		target_label  = "service"
+		replacement   = "$1"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_plg_service"]
+		regex         = "(.+)"
+		target_label  = "service"
+	}
+
+	rule {
+		source_labels = ["service"]
+		target_label  = "job"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_plg_job"]
+		regex         = "(.+)"
+		target_label  = "job"
+	}
+
+	rule {
+		target_label = "instance"
+		replacement  = sys.env("MONITORING_HOST")
+	}
+}
+
+prometheus.scrape "docker_apps" {
+	targets         = discovery.relabel.docker_apps.output
+	forward_to      = [prometheus.remote_write.default.receiver]
+	scrape_interval = "30s"
+	sample_limit    = encoding.from_json(coalesce(sys.env("APP_METRICS_SAMPLE_LIMIT"), "10000"))
+}
