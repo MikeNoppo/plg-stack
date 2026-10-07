@@ -65,7 +65,7 @@
         "type": "custom",
         "name": "level",
         "label": "Level",
-        "query": "emergency,alert,critical,error,warning,notice,info,debug",
+        "query": "emerg,alert,crit,error,warning,notice,info,debug",
         "multi": true,
         "includeAll": true,
         "allValue": ".*",
@@ -85,8 +85,8 @@
             "selected": true
           },
           {
-            "text": "emergency",
-            "value": "emergency",
+            "text": "emerg",
+            "value": "emerg",
             "selected": false
           },
           {
@@ -95,8 +95,8 @@
             "selected": false
           },
           {
-            "text": "critical",
-            "value": "critical",
+            "text": "crit",
+            "value": "crit",
             "selected": false
           },
           {
