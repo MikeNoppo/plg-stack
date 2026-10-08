@@ -421,8 +421,8 @@ tests/run.sh
 Test berjalan tanpa root, Docker, atau jaringan: parser katalog modul,
 penyimpanan konfigurasi agent, pemilihan modul, batas memori, token gateway,
 `agent-token.sh`, generator dashboard (hasilnya sesuai config, struktur
-dashboard, threshold panel sama dengan alert), backup dan restore (dengan
-restic tiruan), dan `doctor.sh`. Test generator butuh Python 3.11+.
+dashboard, threshold panel sama dengan alert), config Loki, backup dan restore
+(dengan restic tiruan), dan `doctor.sh`. Test generator butuh Python 3.11+.
 
 ## Troubleshooting
 

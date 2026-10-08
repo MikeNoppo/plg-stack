@@ -70,6 +70,18 @@ services:
       - ./prometheus:/etc/prometheus:ro
       - prometheus-data:/prometheus
 
+  # The Loki image has no shell, so its config is written beforehand.
+  loki-init:
+    image: alpine:${ALPINE_VERSION:-3.24}
+    logging: *logging
+    mem_limit: 32m
+    environment:
+      LOKI_STORAGE: ${LOKI_STORAGE:-filesystem}
+    command: ["/bin/sh", "/src/init.sh"]
+    volumes:
+      - ./loki:/src:ro
+      - loki-config:/config
+
   # The Loki image is distroless (no shell or wget), so it has no
   # healthcheck; the watchdog checks /ready instead.
   loki:
@@ -79,9 +91,10 @@ services:
     mem_limit: ${LOKI_MEMORY_LIMIT:-1g}
     cpus: ${LOKI_CPUS:-1}
     command:
-      - -config.file=/etc/loki/${LOKI_CONFIG:-loki.yaml}
+      - -config.file=/config/loki.yaml
       - -config.expand-env=true
     environment:
+      LOKI_STORAGE: ${LOKI_STORAGE:-filesystem}
       LOKI_RETENTION: ${LOKI_RETENTION:-14d}
       LOKI_RETENTION_JOURNAL: ${LOKI_RETENTION_JOURNAL:-${LOKI_RETENTION:-14d}}
       LOKI_SHORT_RETENTION: ${LOKI_SHORT_RETENTION:-${LOKI_RETENTION:-14d}}
@@ -102,8 +115,11 @@ services:
       LOKI_S3_SECRET_ACCESS_KEY: ${LOKI_S3_SECRET_ACCESS_KEY:-}
       LOKI_S3_FORCE_PATH_STYLE: ${LOKI_S3_FORCE_PATH_STYLE:-false}
     volumes:
-      - ./loki:/etc/loki:ro
+      - loki-config:/config:ro
       - loki-data:/loki
+    depends_on:
+      loki-init:
+        condition: service_completed_successfully
 
   grafana:
     image: grafana/grafana:${GRAFANA_VERSION:-13.2.3}
@@ -194,7 +210,7 @@ services:
       AWS_ACCESS_KEY_ID: ${BACKUP_S3_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${BACKUP_S3_SECRET_ACCESS_KEY:-}
       AWS_DEFAULT_REGION: ${BACKUP_S3_REGION:-}
-      LOKI_CONFIG: ${LOKI_CONFIG:-loki.yaml}
+      LOKI_STORAGE: ${LOKI_STORAGE:-filesystem}
       GRAFANA_DB_TYPE: ${GRAFANA_DB_TYPE:-sqlite3}
     volumes:
       - ./backup/backup.sh:/backup/backup.sh:ro
@@ -265,6 +281,7 @@ volumes:
   caddy-data:
   caddy-config:
   prometheus-data:
+  loki-config:
   loki-data:
   grafana-data:
   agent-data:

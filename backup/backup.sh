@@ -128,7 +128,7 @@ link_loki() {
 stage_prometheus() { stage_links prometheus; }
 
 stage_loki() {
-	if [ "${LOKI_CONFIG:-loki.yaml}" != loki.yaml ]; then
+	if [ "${LOKI_STORAGE:-filesystem}" != filesystem ]; then
 		log "Loki menyimpan log di S3, jadi datanya tidak ikut dibackup"
 		return 2
 	fi

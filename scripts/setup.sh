@@ -175,13 +175,11 @@ ask value "Terima metrik terlambat hingga" "$(old PROMETHEUS_OOO_WINDOW 24h)" '^
 set_value PROMETHEUS_OOO_WINDOW "$value"
 
 info "Penyimpanan log"
-echo "  local : di volume Docker server ini (ikut dipindah lewat backup/restore)."
-echo "  s3    : di bucket S3 / S3-compatible (tidak perlu dipindah, disk lokal aman)."
-default_storage=local
-[[ "$(old LOKI_CONFIG)" == loki-s3.yaml ]] && default_storage=s3
-ask STORAGE "Pilih (local/s3)" "$default_storage" '^(local|s3)$'
+echo "  filesystem : di volume Docker server ini (ikut dipindah lewat backup/restore)."
+echo "  s3         : di bucket S3 / S3-compatible (tidak perlu dipindah, disk lokal aman)."
+ask STORAGE "Pilih (filesystem/s3)" "$(old LOKI_STORAGE filesystem)" '^(filesystem|s3)$'
+set_value LOKI_STORAGE "$STORAGE"
 if [[ "$STORAGE" == s3 ]]; then
-	set_value LOKI_CONFIG loki-s3.yaml
 	ask value "Nama bucket" "$(old LOKI_S3_BUCKET)"
 	set_value LOKI_S3_BUCKET "$value"
 	ask value "Region" "$(old LOKI_S3_REGION ap-southeast-1)"
@@ -194,8 +192,6 @@ if [[ "$STORAGE" == s3 ]]; then
 	ask value "Secret access key" "$(old LOKI_S3_SECRET_ACCESS_KEY)"
 	set_value LOKI_S3_SECRET_ACCESS_KEY "$value"
 	set_value LOKI_S3_FORCE_PATH_STYLE "$([[ -n "$LOKI_S3_ENDPOINT" ]] && echo true || echo false)"
-else
-	set_value LOKI_CONFIG loki.yaml
 fi
 
 info "Log container stack"

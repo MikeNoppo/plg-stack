@@ -59,10 +59,10 @@ assert_ok "a block written while the WAL is linked is staged too" test -f "$dir/
 loki="$VOLUMES/loki"
 mkdir -p "$loki/chunks/fake" "$loki/wal" "$loki/tsdb-index" "$loki/tsdb-cache"
 echo chunk >"$loki/chunks/fake/1"
-LOKI_CONFIG=loki-s3.yaml
+LOKI_STORAGE=s3
 stage_loki >/dev/null 2>&1
 assert_eq 2 "$?" "Loki on S3 is skipped"
-LOKI_CONFIG=loki.yaml
+LOKI_STORAGE=filesystem
 : >"$WORK/wget.log"
 # A flush that finishes while the index is linked stores a new chunk.
 cp() {
