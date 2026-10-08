@@ -279,7 +279,8 @@ Dashboard di folder **PLG Stack**:
   berbunyi, evaluasi rule yang gagal, serta daftar perubahan status. Riwayatnya
   disimpan Grafana di Loki.
 - **PLG Stack Health**: kesehatan komponen, ingest metrik dan log (termasuk
-  data yang ditolak), disk metrik vs batas, volume per server, dan status agent.
+  data yang ditolak), disk metrik vs batas, volume per server, status agent,
+  dan status backup.
 
 **Navigasi**: klik nama host di tabel mana pun untuk membuka Host Detail,
 Containers, Logs, atau Uptime yang sudah terfilter ke server itu, dengan
@@ -349,8 +350,9 @@ Isi `BACKUP_*` di `.env` (lihat `.env.example`), lalu tambahkan `backup` ke
   ada di bucket), database Grafana (bila SQLite), dan sertifikat TLS. Bisa
   dipilih lewat `BACKUP_TARGETS`.
 
-Arahkan `BACKUP_PING_URL` dan `BACKUP_FAIL_URL` ke layanan seperti
-healthchecks.io supaya ada peringatan saat backup gagal atau berhenti berjalan.
+Status backup terakhir tampil di **PLG Stack Health**. Arahkan
+`BACKUP_PING_URL` dan `BACKUP_FAIL_URL` ke layanan seperti healthchecks.io
+supaya ada peringatan saat backup gagal atau berhenti berjalan.
 
 ```bash
 scripts/backup.sh                     # backup sekarang

@@ -441,6 +441,20 @@ def stack_health(S):
     L.add(timeseries(t("health.lag_per_server"), [target(LAG % ("", ""), "{{host}}")], unit="s", minv=0,
                      thresholds=S.steps("agent_lag"), desc=t("health.lag_per_server_desc"), links=go.per_series()), 24, 8)
 
+    L.row(t("health.backup"))
+    L.add(stat(t("health.backup_age"), 'time() - max(plg_backup_last_success_timestamp_seconds)', unit="s",
+               thresholds=S.steps("backup_age"), no_value=t("health.backup_off"), desc=t("health.backup_age_desc")), 6, 4)
+    L.add(stat(t("health.backup_status"), 'max(plg_backup_last_status)', color_mode="background", no_value="-",
+               mappings=value_mapping((0, t("health.backup_failed"), "red"), (1, "OK", "green")),
+               thresholds={"mode": "absolute", "steps": [{"color": "red", "value": None}, {"color": "green", "value": 1}]}),
+          6, 4)
+    L.add(stat(t("health.backup_duration"), 'max(plg_backup_last_duration_seconds)', unit="s", no_value="-"), 6, 4)
+    L.add(stat(t("health.backup_runs"), 'max(plg_backup_runs)', no_value="-", desc=t("health.backup_runs_desc")), 6, 4)
+    L.add(bargauge(t("health.backup_processed"), 'max by (target) (plg_backup_processed_bytes)', "{{target}}",
+                   unit="bytes", join=True), 12, 6)
+    L.add(bargauge(t("health.backup_added"), 'max by (target) (plg_backup_added_bytes)', "{{target}}",
+                   unit="bytes", join=True, desc=t("health.backup_added_desc")), 12, 6)
+
     return dashboard("plg-stack-health", t("health.title"), t("health.description"), [], L)
 
 

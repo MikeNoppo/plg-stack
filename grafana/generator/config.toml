@@ -18,6 +18,7 @@ disk = { warning = 85, critical = 95 }            # % of a filesystem in use
 load = { warning = 0.8, critical = 1.5 }          # 5-minute load average per vCPU
 agent_lag = { warning = "2m", critical = "10m" }  # how far behind an agent is in sending data
 metrics_disk = { warning = 80, critical = 90 }    # % of PROMETHEUS_RETENTION_SIZE in use
+backup_age = { warning = "26h", critical = "50h" } # time since the last successful backup
 availability = { warning = 99.9, critical = 99 }  # % of time a server reported (lower is worse)
 
 # A server is "not reporting" once it has been silent for `silent_after`.

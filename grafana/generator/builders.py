@@ -102,8 +102,10 @@ def timeseries(title, targets, unit="short", stack=False, minv=None, maxv=None, 
 
 
 def stat(title, expr, unit="short", thresholds=OK_ONLY, desc="", mappings=None, color_mode="value", legend="",
-         ds=PROM, decimals=None):
+         ds=PROM, no_value=None, decimals=None):
     defaults = {"unit": unit, "thresholds": thresholds, "mappings": mappings or [], "color": {"mode": "thresholds"}}
+    if no_value is not None:
+        defaults["noValue"] = no_value
     if decimals is not None:
         defaults["decimals"] = decimals
     return {"type": "stat", "title": title, "description": desc, "datasource": ds,
