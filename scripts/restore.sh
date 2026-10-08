@@ -1,64 +1,61 @@
 #!/usr/bin/env bash
-# Restores volumes archived by scripts/backup.sh into this checkout's stack.
+# Replaces the stack's data with a backup made by the backup service.
 #
-#   scripts/restore.sh [--project NAME] [--no-start] BACKUP_DIR
+#   scripts/restore.sh [--project NAME] [--no-start] [--yes] [RUN]
 #
-# Standalone: run from the repo with .env in place; the stack is started after.
-# Dokploy: deploy once, stop it, then pass --project <app name> --no-start
-# and redeploy from Dokploy.
+# RUN is a backup from `scripts/backup.sh snapshots` (default: the latest).
+# .env must hold the BACKUP_* values of the server that made the backup.
+# Standalone: run from the repo; the stack is started afterwards.
+# Dokploy: deploy once and Stop the app, then run this from the app's code
+# directory with --project <app name> --no-start, and Deploy again.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-
-PROJECT=""
-START=1
-SRC=""
-
-while (($#)); do
-	case "$1" in
-	--project) PROJECT="${2:?--project butuh nilai}" && shift ;;
-	--no-start) START=0 ;;
-	-h | --help) sed -n '2,9p' "$0" && exit 0 ;;
-	*) SRC="$1" ;;
-	esac
-	shift
-done
 
 die() {
 	printf 'ERROR: %s\n' "$*" >&2
 	exit 1
 }
 
-[[ -n "$SRC" && -d "$SRC" ]] || die "Folder backup tidak ditemukan. Pemakaian: scripts/restore.sh BACKUP_DIR"
-SRC="$(cd "$SRC" && pwd)"
-
-if [[ -z "$PROJECT" ]]; then
-	[[ -f .env ]] || die ".env belum ada; jalankan scripts/setup.sh atau salin dari server lama."
-	PROJECT="$(docker compose config --format json | sed -n 's/^ *"name": *"\([^"]*\)".*/\1/p' | head -1)"
-	[[ -n "$PROJECT" ]] || die "Gagal membaca nama project compose."
-	docker compose up --no-start >/dev/null
-fi
-
-mapfile -t running < <(docker ps -q --filter "label=com.docker.compose.project=$PROJECT")
-((${#running[@]} == 0)) || die "Stack $PROJECT masih berjalan; hentikan dulu (docker compose stop atau Stop di Dokploy)."
-
-for archive in "$SRC"/*.tar.gz; do
-	[[ -e "$archive" ]] || die "Tidak ada arsip .tar.gz di $SRC"
-	key="$(basename "$archive" .tar.gz)"
-	volume="$(docker volume ls -q --filter "label=com.docker.compose.project=$PROJECT" \
-		--filter "label=com.docker.compose.volume=$key")"
-	if [[ -z "$volume" ]]; then
-		echo "  - volume $key tidak ada di project $PROJECT, dilewati"
-		continue
-	fi
-	docker run --rm -v "$volume:/data" -v "$SRC:/backup:ro" alpine:3 \
-		sh -c "find /data -mindepth 1 -delete && tar xzf '/backup/$key.tar.gz' -C /data"
-	echo "  ✓ $key dipulihkan ke $volume"
+PROJECT=""
+START=1
+YES=0
+RUN=latest
+while (($#)); do
+	case "$1" in
+	--project) PROJECT="${2:?--project butuh nilai}" && shift ;;
+	--no-start) START=0 ;;
+	--yes) YES=1 ;;
+	-h | --help) sed -n '2,11p' "$0" | sed 's/^#//' && exit 0 ;;
+	-*) die "Opsi tidak dikenal: $1" ;;
+	*) RUN="$1" ;;
+	esac
+	shift
 done
 
+[[ -f .env ]] || die ".env belum ada; salin dari server lama atau jalankan scripts/setup.sh."
+grep -q '^BACKUP_REPOSITORY=..*' .env && grep -q '^BACKUP_PASSWORD=..*' .env ||
+	die "BACKUP_REPOSITORY dan BACKUP_PASSWORD di .env harus sama dengan server yang membuat backup."
+
+compose=(docker compose)
+[[ -z "$PROJECT" ]] || compose+=(-p "$PROJECT")
+PROJECT="$("${compose[@]}" config --format json | sed -n 's/^ *"name": *"\([^"]*\)".*/\1/p' | head -1)"
+[[ -n "$PROJECT" ]] || die "Gagal membaca nama project compose."
+
+mapfile -t running < <(docker ps -q --filter "label=com.docker.compose.project=$PROJECT")
+((${#running[@]} == 0)) || die "Stack $PROJECT masih berjalan; hentikan dulu (docker compose stop, atau Stop di Dokploy)."
+
+if ((!YES)); then
+	read -r -p "Semua data stack $PROJECT (metrik, log, Grafana, sertifikat) diganti dengan backup '$RUN'. Lanjut? [y/N] " answer
+	[[ "${answer,,}" =~ ^(y|yes|ya)$ ]] || exit 1
+fi
+
+"${compose[@]}" --profile backup up --no-start >/dev/null
+"${compose[@]}" --profile backup run --rm --no-deps backup restore "$RUN"
+
 if ((START)); then
-	docker compose up -d
-	echo "==> Stack berjalan. Jangan lupa arahkan DNS ke server ini."
+	"${compose[@]}" up -d
+	echo "==> Stack berjalan dengan data dari backup '$RUN'. Jangan lupa arahkan DNS ke server ini."
 else
 	echo "==> Selesai. Jalankan stack lagi (Deploy di Dokploy)."
 fi

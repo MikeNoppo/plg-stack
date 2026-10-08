@@ -37,7 +37,7 @@ Prinsip yang membuat stack ini mudah dipindah dan diatur:
 
 | Path | Fungsi |
 |---|---|
-| `compose.yaml` | Stack: gateway (Caddy), Prometheus, Loki, Grafana, watchdog, agent self-monitoring |
+| `compose.yaml` | Stack: gateway (Caddy), Prometheus, Loki, Grafana, watchdog, agent self-monitoring, backup |
 | `compose.standalone.yaml` | Membuka port 80/443 untuk mode server biasa |
 | `gateway/` | Routing domain, token agent (`entrypoint.sh`), TLS otomatis |
 | `prometheus/`, `loki/` | Konfigurasi server; nilai dinamis diambil dari `.env` |
@@ -45,6 +45,7 @@ Prinsip yang membuat stack ini mudah dipindah dan diatur:
 | `grafana/provisioning/`, `grafana/dashboards/` | Datasource, alert rules, dashboard (dashboard dan alert hasil generator) |
 | `grafana/alerting-examples/` | Contoh contact point Telegram / Slack / email |
 | `watchdog/` | Heartbeat ke layanan eksternal |
+| `backup/` | Script yang berjalan di container `backup`: jadwal, backup restic, restore |
 | `agent/install.sh` | Installer agent satu perintah |
 | `agent/modules/` | Modul Alloy + `catalog.conf` (daftar modul untuk installer) |
 | `scripts/` | `setup.sh` (buat `.env`), `agent-token.sh` (token per server), `backup.sh` / `restore.sh` |
@@ -104,6 +105,7 @@ Semua nilai di bawah punya default dan bisa diubah tanpa menyentuh file lain
 | Grafana | `GRAFANA_PLUGINS`, `GRAFANA_DB_*` (PostgreSQL/MySQL sebagai pengganti SQLite) |
 | Self-monitoring | `COMPOSE_PROFILES=self-monitoring`, `SELF_MONITORING_*` |
 | Watchdog | `WATCHDOG_URL`, `WATCHDOG_FAIL_URL`, `WATCHDOG_INTERVAL` |
+| Backup | `COMPOSE_PROFILES=backup`, `BACKUP_*`, `TZ` (lihat [Backup dan restore](#4-backup-dan-restore)) |
 
 Loki hanya membatasi umur log, bukan ukurannya. Pertumbuhan disk dikendalikan
 lewat retensi per jenis dan limit ingest; pantau ukurannya di dashboard
@@ -326,18 +328,53 @@ read-only. Simpan dashboard buatan sendiri di folder lain, misalnya
 `grafana/dashboards/Custom/`: folder **PLG Stack** milik generator, dan test
 menolak file lain di sana.
 
-## 4. Memindahkan stack ke server lain
+## 4. Backup dan restore
 
-1. Di server lama: `scripts/backup.sh` (menghentikan stack sebentar, lalu
-   mengarsipkan volume ke `backups/<waktu>/`). Di Dokploy, project compose
-   dideteksi otomatis.
-2. Salin folder backup dan `.env` ke server baru, lalu clone repo ini.
-3. Di server baru:
-   - **Standalone**: ubah `.env` ke mode standalone (`./scripts/setup.sh`), lalu
-     jalankan `scripts/restore.sh backups/<waktu>`. Stack langsung dinyalakan.
-   - **Dokploy**: deploy sekali, *Stop*, lalu jalankan
-     `scripts/restore.sh --project <app-name> --no-start backups/<waktu>` dan
-     Deploy lagi.
+Isi `BACKUP_*` di `.env` (lihat `.env.example`), lalu tambahkan `backup` ke
+`COMPOSE_PROFILES`. Service `backup` membuat backup setiap hari pada jam
+`BACKUP_SCHEDULE` (zona waktu `TZ`):
+
+- **Tanpa downtime.** Data Prometheus dan Loki di-snapshot dengan hard link
+  (instan, tanpa menyalin data), Loki diminta menulis log yang masih di memori
+  ke disk lebih dulu, dan `grafana.db` hanya disalin saat tidak ada transaksi
+  yang sedang berjalan.
+- **Terenkripsi dan bertahap.** Memakai [restic](https://restic.net): semua
+  data dienkripsi dengan `BACKUP_PASSWORD`, dan setelah backup pertama hanya
+  data yang berubah yang diunggah.
+- **Tujuan**: bucket S3 / S3-compatible (AWS, MinIO, Cloudflare R2, Wasabi),
+  atau `/local` (folder `BACKUP_LOCAL_DIR` di server ini).
+- **Retensi**: `BACKUP_KEEP_DAILY`, `BACKUP_KEEP_WEEKLY`, `BACKUP_KEEP_MONTHLY`;
+  backup yang lebih lama dihapus otomatis.
+- **Isi**: metrik, log (bila Loki menyimpan di disk lokal; di mode S3 log sudah
+  ada di bucket), database Grafana (bila SQLite), dan sertifikat TLS. Bisa
+  dipilih lewat `BACKUP_TARGETS`.
+
+Arahkan `BACKUP_PING_URL` dan `BACKUP_FAIL_URL` ke layanan seperti
+healthchecks.io supaya ada peringatan saat backup gagal atau berhenti berjalan.
+
+```bash
+scripts/backup.sh                     # backup sekarang
+scripts/backup.sh snapshots           # daftar backup
+scripts/backup.sh check               # verifikasi repository (membaca 5% data)
+scripts/restore.sh                    # pulihkan backup terbaru (stack dihentikan dulu)
+scripts/restore.sh 20261008-020000    # pulihkan backup tertentu
+```
+
+**Simpan `BACKUP_PASSWORD` di luar server** (misalnya di password manager):
+tanpa password itu backup tidak bisa dibuka.
+
+## 5. Memindahkan stack ke server lain
+
+1. Di server lama: `scripts/backup.sh` untuk backup terakhir.
+2. Di server baru: clone repo ini dan salin `.env` (dengan `BACKUP_*` yang sama).
+   Untuk tujuan `/local`, salin juga isi folder `BACKUP_LOCAL_DIR`.
+3. Pulihkan datanya:
+   - **Standalone**: ubah `.env` ke mode standalone bila perlu
+     (`./scripts/setup.sh`), lalu `scripts/restore.sh`. Stack langsung
+     dinyalakan.
+   - **Dokploy**: deploy sekali, *Stop*, lalu dari folder kode aplikasi itu
+     jalankan `scripts/restore.sh --project <app-name> --no-start`, dan Deploy
+     lagi.
 4. Ubah DNS `grafana.*` dan `ingest.*` ke server baru.
 5. Matikan stack di server lama.
 
@@ -356,6 +393,7 @@ Kalau histori metrik tidak perlu ikut, langkah 1–3 cukup diganti deploy baru.
   membutuhkannya; filesystem host selalu di-mount read-only. UI Alloy hanya
   listen di `127.0.0.1:12345`.
 - File kredensial agent: `/etc/plg-agent/agent.env`, mode `600`.
+- Backup dienkripsi sebelum meninggalkan server (`BACKUP_PASSWORD`).
 
 ## Pengembangan
 
@@ -365,9 +403,9 @@ tests/run.sh
 
 Test berjalan tanpa root, Docker, atau jaringan: parser katalog modul,
 penyimpanan konfigurasi agent, pemilihan modul, batas memori, token gateway,
-`agent-token.sh`, dan generator dashboard (hasilnya sesuai config, struktur
-dashboard, threshold panel sama dengan alert). Test generator butuh Python
-3.11+.
+`agent-token.sh`, generator dashboard (hasilnya sesuai config, struktur
+dashboard, threshold panel sama dengan alert), serta backup dan restore
+(dengan restic tiruan). Test generator butuh Python 3.11+.
 
 ## Troubleshooting
 
