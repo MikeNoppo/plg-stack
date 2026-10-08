@@ -1,0 +1,229 @@
+# Dashboard and alert text in Indonesian. {name} is filled in from
+# config.toml (thresholds and durations); {{...}} are Grafana templates and
+# are kept as they are.
+
+[units]
+s = "detik"
+m = "menit"
+h = "jam"
+d = "hari"
+w = "minggu"
+
+[common]
+running_containers = "Container berjalan"
+logs = "Log"
+
+[col]
+host = "Host"
+env = "Env"
+cpu = "CPU"
+ram = "RAM"
+ram_total = "RAM total"
+uptime = "Uptime"
+load5 = "Load 5m"
+service = "Service"
+database = "Database"
+status = "Status"
+
+[var]
+env = "Env"
+host = "Host"
+level = "Level"
+search = "Cari"
+service = "Service"
+source = "Sumber"
+
+[link]
+host_detail = "Buka detail server"
+
+[fleet]
+title = "Fleet Overview"
+description = "Ringkasan semua server yang dimonitor."
+active_servers = "Server aktif"
+silent_servers = "Server tidak mengirim data"
+silent_servers_desc = "Terlihat dalam {forget_after} terakhir, tapi diam lebih dari {silent_after}."
+full_filesystems = "Filesystem > {disk_warning}%"
+databases_down = "Database down"
+total_vcpu = "Total vCPU"
+all_servers = "Semua server"
+all_servers_desc = "Klik nama host untuk membuka detail."
+silent_table_desc = "Kosong berarti semua server sehat."
+trends = "Tren"
+cpu_per_server = "CPU per server"
+ram_per_server = "RAM per server"
+network_in = "Network masuk per server"
+network_out = "Network keluar per server"
+duplicate_names = "Nama server dipakai lebih dari satu mesin"
+duplicate_names_desc = "Dua mesin dengan nama/token yang sama membuat datanya tercampur. Kosong berarti aman."
+
+[fleet.col]
+fullest_disk = "Disk terpenuh"
+agent = "Agent"
+machines = "Jumlah mesin"
+
+[host]
+title = "Host Detail"
+description = "Detail satu server: CPU, RAM, disk, network, dan log sistem."
+disk_root = "Disk /"
+load_per_vcpu = "Load 5m / vCPU"
+cpu_ram = "CPU & RAM"
+cpu_per_mode = "CPU per mode"
+load_average = "Load average"
+processes = "Proses"
+disk = "Disk"
+filesystem_usage = "Pemakaian filesystem"
+disk_throughput = "Disk throughput"
+disk_busy = "Disk busy (I/O time)"
+network = "Network"
+traffic = "Traffic per interface"
+tcp = "Koneksi TCP"
+cpu_per_process = "CPU per proses"
+cpu_per_process_desc = "Butuh modul process. 100% = 1 core."
+ram_per_process = "RAM per proses"
+ram_per_process_desc = "Butuh modul process."
+agent = "Agent dan koneksi"
+agent_lag = "Keterlambatan kirim agent"
+agent_lag_desc = "Selisih antara data terbaru dan data yang sudah terkirim. Naik saat server terputus dari PLG Stack dan turun lagi setelah backlog terkirim. Kosong sama sekali berarti server mati (tidak ada data yang dikumpulkan)."
+retries = "Pengiriman ulang dan data terbuang"
+retries_desc = "Pengiriman ulang wajar saat koneksi terputus; data terbuang seharusnya nol."
+journal = "Log sistem (journald)"
+
+[host.legend]
+used = "Dipakai"
+cache = "Cache + buffer"
+available = "Tersedia"
+swap_used = "Swap dipakai"
+blocked = "Blocked (I/O)"
+read = "baca {{device}}"
+write = "tulis {{device}}"
+in = "masuk {{device}}"
+out = "keluar {{device}}"
+pending = "tertunda"
+metrics_retried = "metrik dikirim ulang"
+log_batches_retried = "batch log dikirim ulang"
+metrics_dropped = "metrik terbuang"
+logs_dropped = "log terbuang"
+
+[containers]
+title = "Containers"
+description = "Metrik dan log container Docker per service (Dokploy, compose, Swarm)."
+total_cpu = "Total CPU container"
+total_cpu_desc = "Dalam satuan core."
+total_ram = "Total RAM container"
+recreated = "Container dibuat ulang (rentang waktu)"
+table = "Container"
+per_service = "Pemakaian per service"
+cpu_per_service = "CPU per service"
+cpu_per_service_desc = "100% = 1 core penuh."
+ram_per_service = "RAM per service"
+network_in = "Network masuk per service"
+network_out = "Network keluar per service"
+logs = "Log container"
+
+[containers.col]
+cpu = "CPU (% 1 core)"
+ram_limit = "Limit RAM"
+
+[logs]
+title = "Logs"
+description = "Cari log dari semua server: container, journald, dan file log database."
+volume_per_host = "Volume log per host"
+errors_per_host = "Baris error per host"
+errors_per_host_desc = "Baris yang mengandung error, fatal, panic, exception, atau critical."
+
+[databases]
+title = "Databases"
+description = "PostgreSQL, MySQL/MariaDB, Redis, dan MongoDB yang dipantau agent."
+status = "Status database"
+connections_per_db = "Koneksi per database"
+transactions = "Transaksi / detik"
+size = "Ukuran database"
+connections = "Koneksi"
+queries = "Query / detik"
+slow_queries = "Slow query / detik"
+memory = "Memori"
+clients = "Client terhubung"
+commands = "Command / detik"
+operations = "Operasi / detik"
+logs = "Log database"
+
+[databases.legend]
+connected = "terhubung @ {{host}}"
+
+[health]
+title = "PLG Stack Health"
+description = "Kesehatan stack monitoring: komponen, ingest metrik dan log, serta agent."
+components = "Komponen"
+active_agents = "Agent aktif"
+active_series = "Series aktif"
+metrics_disk_pct = "Disk metrik vs batas"
+metrics_disk_pct_desc = "Pemakaian disk Prometheus dibanding PROMETHEUS_RETENTION_SIZE. Data tertua dihapus saat penuh."
+metrics_disk = "Disk metrik"
+metrics_ingest = "Ingest metrik"
+samples_in = "Sampel masuk / detik"
+remote_write_status = "Request remote write per status"
+late_samples = "Sampel terlambat dan ditolak"
+late_samples_desc = "Terlambat-diterima naik saat agent mengirim backlog setelah offline. Yang ditolak berarti backlog lebih tua dari PROMETHEUS_OOO_WINDOW."
+samples_per_server = "Sampel per scrape, per server"
+samples_per_server_desc = "Server dengan angka besar paling banyak memakai disk dan RAM Prometheus."
+logs_ingest = "Ingest log"
+logs_in = "Log masuk"
+logs_rejected = "Log ditolak Loki"
+logs_rejected_desc = "rate_limited / per_stream_rate_limit: naikkan LOKI_INGESTION_RATE_MB atau kurangi log. greater_than_max_sample_age: backlog lebih tua dari LOKI_MAX_LOG_AGE."
+log_volume_per_server = "Volume log per server (rentang waktu)"
+log_volume_per_server_desc = "Total byte log per server dalam rentang waktu dashboard."
+agents = "Agent"
+agent_status = "Status agent per server"
+agent_status_desc = "Log difilter = baris yang sengaja dibuang lewat LOG_DROP_REGEX."
+lag_per_server = "Keterlambatan kirim per server"
+lag_per_server_desc = "Puncak menandai periode server terputus dari PLG Stack (backlog dikirim setelahnya)."
+
+[health.legend]
+late_accepted = "terlambat, diterima"
+rejected_order = "ditolak: urutan"
+rejected_bounds = "ditolak: di luar batas"
+rejected_old = "ditolak: terlalu lama"
+bytes_per_s = "byte/detik"
+lines_per_s = "baris/detik"
+
+[health.col]
+version = "Versi"
+lag = "Tertunda kirim"
+metrics_dropped = "Metrik terbuang (1j)"
+logs_dropped = "Log terbuang (1j)"
+logs_filtered = "Log difilter (1j)"
+
+[alert.host_not_reporting]
+title = "Server tidak mengirim data"
+summary = 'Server {{ .Labels.host }} ({{ .Labels.env }}) tidak mengirim data lebih dari {not_reporting_after}'
+description = "Server mati, jaringan putus, atau agent berhenti. Cek `systemctl status alloy` atau `docker logs plg-agent`."
+
+[alert.disk_high]
+title = "Disk hampir penuh"
+
+[alert.disk_critical]
+title = "Disk kritis"
+
+[alert.disk_usage]
+summary = 'Disk {{ .Labels.mountpoint }} di {{ .Labels.host }} terpakai {{ printf "%.0f" .Values.A.Value }}%'
+
+[alert.disk_fill]
+title = "Disk diprediksi penuh dalam {forecast_horizon}"
+summary = 'Disk {{ .Labels.mountpoint }} di {{ .Labels.host }} diprediksi penuh dalam {forecast_horizon}'
+
+[alert.memory_high]
+title = "RAM hampir habis"
+summary = 'RAM {{ .Labels.host }} terpakai {{ printf "%.0f" .Values.A.Value }}%'
+
+[alert.cpu_high]
+title = "CPU tinggi"
+summary = 'CPU {{ .Labels.host }} {{ printf "%.0f" .Values.A.Value }}% selama {for_cpu_high}'
+
+[alert.container_restarting]
+title = "Container sering restart"
+summary = 'Service {{ .Labels.service }} di {{ .Labels.host }} restart rata-rata {{ printf "%.1f" .Values.A.Value }}x per replika dalam {restart_window}'
+
+[alert.database_down]
+title = "Database tidak bisa diakses"
+summary = 'Database {{ .Labels.job }} di {{ .Labels.host }} tidak bisa diakses agent'
+description = "Database mati, atau kredensial monitoring di agent salah."

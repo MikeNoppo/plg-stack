@@ -1,0 +1,55 @@
+# Source of the dashboards in grafana/dashboards/PLG Stack/ and of the alert
+# rules in grafana/provisioning/alerting/rules.yaml. After editing, run
+#
+#   python3 grafana/generator/generate.py
+#
+# and commit the regenerated files together with this one.
+
+# Language of every dashboard and alert text: a file in lang/ (id, en).
+language = "id"
+
+# Panels color a value orange from `warning` and red from `critical`. Alert
+# rules use the same numbers: a warning alert fires at `warning`, a critical
+# alert at `critical`. Durations are written as 30s, 5m, 2h, 7d.
+[thresholds]
+cpu = { warning = 90, critical = 95 }             # % of all cores, 5-minute average
+memory = { warning = 90, critical = 95 }          # % of RAM in use
+disk = { warning = 85, critical = 95 }            # % of a filesystem in use
+load = { warning = 0.8, critical = 1.5 }          # 5-minute load average per vCPU
+agent_lag = { warning = "2m", critical = "10m" }  # how far behind an agent is in sending data
+metrics_disk = { warning = 80, critical = 90 }    # % of PROMETHEUS_RETENTION_SIZE in use
+
+# A server is "not reporting" once it has been silent for `silent_after`.
+# Servers silent for longer than `forget_after` count as retired and are no
+# longer reported.
+[reporting]
+silent_after = "3m"
+forget_after = "24h"
+
+# "Disk predicted full" alert: extrapolates the free space of the last
+# `lookback` over `horizon`, for filesystems already above `min_usage` %.
+[disk_forecast]
+lookback = "6h"
+horizon = "24h"
+min_usage = 70
+
+# "Container restarting" alert: more than `max_per_replica` restarts per
+# replica within `window`.
+[container_restarts]
+window = "15m"
+max_per_replica = 2
+
+# How long a condition has to last before its alert fires.
+[alert_for]
+host-not-reporting = "2m"
+disk-usage-high = "10m"
+disk-usage-critical = "5m"
+disk-fill-24h = "30m"
+memory-high = "10m"
+cpu-high = "15m"
+container-restarting = "0s"
+database-down = "2m"
+
+# Replaces any text of lang/<language>.toml, e.g.
+#   "fleet.title" = "Semua Server"
+[text]

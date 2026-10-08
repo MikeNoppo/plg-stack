@@ -646,11 +646,11 @@
                     },
                     {
                       "color": "orange",
-                      "value": 80
+                      "value": 90
                     },
                     {
                       "color": "red",
-                      "value": 90
+                      "value": 95
                     }
                   ]
                 }
@@ -689,11 +689,11 @@
                     },
                     {
                       "color": "orange",
-                      "value": 80
+                      "value": 90
                     },
                     {
                       "color": "red",
-                      "value": 90
+                      "value": 95
                     }
                   ]
                 }
@@ -732,11 +732,11 @@
                     },
                     {
                       "color": "orange",
-                      "value": 80
+                      "value": 85
                     },
                     {
                       "color": "red",
-                      "value": 90
+                      "value": 95
                     }
                   ]
                 }
@@ -968,10 +968,30 @@
             "stacking": {
               "mode": "none",
               "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
             }
           },
           "min": 0,
-          "max": 100
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 90
+              },
+              {
+                "color": "red",
+                "value": 95
+              }
+            ]
+          }
         },
         "overrides": []
       },
@@ -1029,10 +1049,30 @@
             "stacking": {
               "mode": "none",
               "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
             }
           },
           "min": 0,
-          "max": 100
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 90
+              },
+              {
+                "color": "red",
+                "value": 95
+              }
+            ]
+          }
         },
         "overrides": []
       },

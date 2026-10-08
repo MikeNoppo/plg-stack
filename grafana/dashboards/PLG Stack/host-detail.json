@@ -377,11 +377,11 @@
               },
               {
                 "color": "orange",
-                "value": 80
+                "value": 90
               },
               {
                 "color": "red",
-                "value": 90
+                "value": 95
               }
             ]
           },
@@ -446,11 +446,11 @@
               },
               {
                 "color": "orange",
-                "value": 80
+                "value": 90
               },
               {
                 "color": "red",
-                "value": 90
+                "value": 95
               }
             ]
           },
@@ -515,11 +515,11 @@
               },
               {
                 "color": "orange",
-                "value": 80
+                "value": 85
               },
               {
                 "color": "red",
-                "value": 90
+                "value": 95
               }
             ]
           },
@@ -664,10 +664,30 @@
             "stacking": {
               "mode": "normal",
               "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
             }
           },
           "min": 0,
-          "max": 100
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 90
+              },
+              {
+                "color": "red",
+                "value": 95
+              }
+            ]
+          }
         },
         "overrides": []
       },
@@ -965,6 +985,7 @@
     {
       "type": "bargauge",
       "title": "Pemakaian filesystem",
+      "description": "",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -996,11 +1017,11 @@
               },
               {
                 "color": "orange",
-                "value": 80
+                "value": 85
               },
               {
                 "color": "red",
-                "value": 90
+                "value": 95
               }
             ]
           },
@@ -1319,7 +1340,7 @@
       "title": "Proses",
       "collapsed": false,
       "panels": [],
-      "id": 22,
+      "id": 20,
       "gridPos": {
         "x": 0,
         "y": 39,
@@ -1378,7 +1399,7 @@
           "sort": "desc"
         }
       },
-      "id": 23,
+      "id": 21,
       "gridPos": {
         "x": 0,
         "y": 40,
@@ -1437,7 +1458,7 @@
           "sort": "desc"
         }
       },
-      "id": 24,
+      "id": 22,
       "gridPos": {
         "x": 12,
         "y": 40,
@@ -1450,7 +1471,7 @@
       "title": "Agent dan koneksi",
       "collapsed": false,
       "panels": [],
-      "id": 25,
+      "id": 23,
       "gridPos": {
         "x": 0,
         "y": 48,
@@ -1489,9 +1510,29 @@
             "stacking": {
               "mode": "none",
               "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
             }
           },
-          "min": 0
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 120
+              },
+              {
+                "color": "red",
+                "value": 600
+              }
+            ]
+          }
         },
         "overrides": []
       },
@@ -1510,7 +1551,7 @@
           "sort": "desc"
         }
       },
-      "id": 26,
+      "id": 24,
       "gridPos": {
         "x": 0,
         "y": 49,
@@ -1602,7 +1643,7 @@
           "sort": "desc"
         }
       },
-      "id": 27,
+      "id": 25,
       "gridPos": {
         "x": 12,
         "y": 49,
@@ -1615,7 +1656,7 @@
       "title": "Log sistem (journald)",
       "collapsed": false,
       "panels": [],
-      "id": 20,
+      "id": 26,
       "gridPos": {
         "x": 0,
         "y": 57,
@@ -1626,6 +1667,7 @@
     {
       "type": "logs",
       "title": "Journald",
+      "description": "",
       "datasource": {
         "type": "loki",
         "uid": "loki"
@@ -1651,7 +1693,7 @@
         "showLabels": false,
         "showCommonLabels": false
       },
-      "id": 21,
+      "id": 27,
       "gridPos": {
         "x": 0,
         "y": 58,

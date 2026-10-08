@@ -642,13 +642,6 @@
           "values": false
         }
       },
-      "id": 10,
-      "gridPos": {
-        "x": 0,
-        "y": 13,
-        "w": 24,
-        "h": 7
-      },
       "transformations": [
         {
           "id": "joinByField",
@@ -656,7 +649,14 @@
             "mode": "outer"
           }
         }
-      ]
+      ],
+      "id": 10,
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 24,
+        "h": 7
+      }
     },
     {
       "type": "row",
@@ -1161,9 +1161,29 @@
             "stacking": {
               "mode": "none",
               "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
             }
           },
-          "min": 0
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 120
+              },
+              {
+                "color": "red",
+                "value": 600
+              }
+            ]
+          }
         },
         "overrides": []
       },

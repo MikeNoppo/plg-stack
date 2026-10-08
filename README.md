@@ -41,7 +41,8 @@ Prinsip yang membuat stack ini mudah dipindah dan diatur:
 | `compose.standalone.yaml` | Membuka port 80/443 untuk mode server biasa |
 | `gateway/` | Routing domain, token agent (`entrypoint.sh`), TLS otomatis |
 | `prometheus/`, `loki/` | Konfigurasi server; nilai dinamis diambil dari `.env` |
-| `grafana/provisioning/`, `grafana/dashboards/` | Datasource, alert rules, dashboard |
+| `grafana/generator/` | Generator dashboard dan alert rules: `config.toml` (threshold, durasi, bahasa) dan `lang/` (teks) |
+| `grafana/provisioning/`, `grafana/dashboards/` | Datasource, alert rules, dashboard (dashboard dan alert hasil generator) |
 | `grafana/alerting-examples/` | Contoh contact point Telegram / Slack / email |
 | `watchdog/` | Heartbeat ke layanan eksternal |
 | `agent/install.sh` | Installer agent satu perintah |
@@ -274,7 +275,8 @@ Dashboard di folder **PLG Stack**:
 
 Alert rules (folder **Alerts**): server tidak mengirim data, disk >85% / >95%,
 disk diprediksi penuh dalam 24 jam, RAM >90%, CPU >90%, container sering
-restart, dan database tidak bisa diakses.
+restart, dan database tidak bisa diakses. Angka-angka itu default dari
+`grafana/generator/config.toml`.
 
 ### Mengaktifkan notifikasi
 
@@ -287,10 +289,30 @@ Tujuan notifikasi belum ditentukan, jadi contoh disediakan terpisah:
    atau `ALERT_EMAIL_ADDRESSES` + `GF_SMTP_*`.
 3. Commit, lalu redeploy.
 
-### Mengubah dashboard
+### Threshold, teks, dan bahasa
 
-Dashboard di-provision read-only. Edit di Grafana → *Save as* copy, atau
-*Export → JSON*, simpan ke `grafana/dashboards/PLG Stack/`, lalu commit.
+Dashboard dan alert rules dibuat oleh generator dari satu config,
+`grafana/generator/config.toml`:
+
+- **Threshold**: warna panel (oranye dan merah) dan alert memakai angka yang
+  sama. Misalnya `memory = { warning = 85, critical = 95 }` mengubah warna
+  panel RAM di semua dashboard sekaligus alert "RAM hampir habis".
+- **Durasi**: kapan server dianggap tidak melapor, prediksi disk penuh, batas
+  restart container, dan berapa lama kondisi bertahan sebelum alert berbunyi.
+- **Bahasa**: `language = "id"` atau `"en"`. Teksnya ada di
+  `grafana/generator/lang/`; teks tertentu bisa diganti lewat bagian `[text]`.
+
+Setelah mengubah config (butuh Python 3.11+):
+
+```bash
+python3 grafana/generator/generate.py
+tests/run.sh
+```
+
+Commit config beserta file hasilnya, lalu redeploy. Dashboard di-provision
+read-only. Simpan dashboard buatan sendiri di folder lain, misalnya
+`grafana/dashboards/Custom/`: folder **PLG Stack** milik generator, dan test
+menolak file lain di sana.
 
 ## 4. Memindahkan stack ke server lain
 
@@ -331,7 +353,9 @@ tests/run.sh
 
 Test berjalan tanpa root, Docker, atau jaringan: parser katalog modul,
 penyimpanan konfigurasi agent, pemilihan modul, batas memori, token gateway,
-dan `agent-token.sh`.
+`agent-token.sh`, dan generator dashboard (hasilnya sesuai config, struktur
+dashboard, threshold panel sama dengan alert). Test generator butuh Python
+3.11+.
 
 ## Troubleshooting
 

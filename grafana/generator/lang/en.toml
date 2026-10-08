@@ -1,0 +1,229 @@
+# Dashboard and alert text in English. {name} is filled in from config.toml
+# (thresholds and durations); {{...}} are Grafana templates and are kept as
+# they are.
+
+[units]
+s = ["second", "seconds"]
+m = ["minute", "minutes"]
+h = ["hour", "hours"]
+d = ["day", "days"]
+w = ["week", "weeks"]
+
+[common]
+running_containers = "Running containers"
+logs = "Logs"
+
+[col]
+host = "Host"
+env = "Env"
+cpu = "CPU"
+ram = "RAM"
+ram_total = "Total RAM"
+uptime = "Uptime"
+load5 = "Load 5m"
+service = "Service"
+database = "Database"
+status = "Status"
+
+[var]
+env = "Env"
+host = "Host"
+level = "Level"
+search = "Search"
+service = "Service"
+source = "Source"
+
+[link]
+host_detail = "Open server details"
+
+[fleet]
+title = "Fleet Overview"
+description = "Summary of every monitored server."
+active_servers = "Active servers"
+silent_servers = "Servers not reporting"
+silent_servers_desc = "Seen in the last {forget_after}, but silent for more than {silent_after}."
+full_filesystems = "Filesystems > {disk_warning}%"
+databases_down = "Databases down"
+total_vcpu = "Total vCPU"
+all_servers = "All servers"
+all_servers_desc = "Click a host name to open its details."
+silent_table_desc = "Empty means every server is healthy."
+trends = "Trends"
+cpu_per_server = "CPU per server"
+ram_per_server = "RAM per server"
+network_in = "Network in per server"
+network_out = "Network out per server"
+duplicate_names = "Server names used by more than one machine"
+duplicate_names_desc = "Two machines with the same name/token mix their data. Empty means none."
+
+[fleet.col]
+fullest_disk = "Fullest disk"
+agent = "Agent"
+machines = "Machines"
+
+[host]
+title = "Host Detail"
+description = "One server in detail: CPU, RAM, disk, network and system logs."
+disk_root = "Disk /"
+load_per_vcpu = "Load 5m / vCPU"
+cpu_ram = "CPU & RAM"
+cpu_per_mode = "CPU per mode"
+load_average = "Load average"
+processes = "Processes"
+disk = "Disk"
+filesystem_usage = "Filesystem usage"
+disk_throughput = "Disk throughput"
+disk_busy = "Disk busy (I/O time)"
+network = "Network"
+traffic = "Traffic per interface"
+tcp = "TCP connections"
+cpu_per_process = "CPU per process"
+cpu_per_process_desc = "Needs the process module. 100% = 1 core."
+ram_per_process = "RAM per process"
+ram_per_process_desc = "Needs the process module."
+agent = "Agent and connection"
+agent_lag = "Agent send delay"
+agent_lag_desc = "Difference between the newest data and the data already sent. Rises while the server is cut off from PLG Stack and drops once the backlog is sent. No data at all means the server was down (nothing was collected)."
+retries = "Retries and dropped data"
+retries_desc = "Retries are expected while the connection is down; dropped data should stay at zero."
+journal = "System logs (journald)"
+
+[host.legend]
+used = "Used"
+cache = "Cache + buffer"
+available = "Available"
+swap_used = "Swap used"
+blocked = "Blocked (I/O)"
+read = "read {{device}}"
+write = "write {{device}}"
+in = "in {{device}}"
+out = "out {{device}}"
+pending = "pending"
+metrics_retried = "metrics retried"
+log_batches_retried = "log batches retried"
+metrics_dropped = "metrics dropped"
+logs_dropped = "logs dropped"
+
+[containers]
+title = "Containers"
+description = "Docker container metrics and logs per service (Dokploy, compose, Swarm)."
+total_cpu = "Total container CPU"
+total_cpu_desc = "In cores."
+total_ram = "Total container RAM"
+recreated = "Containers recreated (time range)"
+table = "Containers"
+per_service = "Usage per service"
+cpu_per_service = "CPU per service"
+cpu_per_service_desc = "100% = 1 full core."
+ram_per_service = "RAM per service"
+network_in = "Network in per service"
+network_out = "Network out per service"
+logs = "Container logs"
+
+[containers.col]
+cpu = "CPU (% of 1 core)"
+ram_limit = "RAM limit"
+
+[logs]
+title = "Logs"
+description = "Search the logs of every server: containers, journald and database log files."
+volume_per_host = "Log volume per host"
+errors_per_host = "Error lines per host"
+errors_per_host_desc = "Lines containing error, fatal, panic, exception or critical."
+
+[databases]
+title = "Databases"
+description = "PostgreSQL, MySQL/MariaDB, Redis and MongoDB watched by the agents."
+status = "Database status"
+connections_per_db = "Connections per database"
+transactions = "Transactions / s"
+size = "Database size"
+connections = "Connections"
+queries = "Queries / s"
+slow_queries = "Slow queries / s"
+memory = "Memory"
+clients = "Connected clients"
+commands = "Commands / s"
+operations = "Operations / s"
+logs = "Database logs"
+
+[databases.legend]
+connected = "connected @ {{host}}"
+
+[health]
+title = "PLG Stack Health"
+description = "Health of the monitoring stack: components, metric and log ingest, and agents."
+components = "Components"
+active_agents = "Active agents"
+active_series = "Active series"
+metrics_disk_pct = "Metrics disk vs limit"
+metrics_disk_pct_desc = "Prometheus disk usage compared to PROMETHEUS_RETENTION_SIZE. The oldest data is deleted when it is full."
+metrics_disk = "Metrics disk"
+metrics_ingest = "Metric ingest"
+samples_in = "Samples in / s"
+remote_write_status = "Remote write requests per status"
+late_samples = "Late and rejected samples"
+late_samples_desc = "Late-accepted rises when agents send their backlog after being offline. Rejected means the backlog was older than PROMETHEUS_OOO_WINDOW."
+samples_per_server = "Samples per scrape, per server"
+samples_per_server_desc = "Servers with large numbers use the most Prometheus disk and RAM."
+logs_ingest = "Log ingest"
+logs_in = "Logs in"
+logs_rejected = "Logs rejected by Loki"
+logs_rejected_desc = "rate_limited / per_stream_rate_limit: raise LOKI_INGESTION_RATE_MB or send fewer logs. greater_than_max_sample_age: the backlog was older than LOKI_MAX_LOG_AGE."
+log_volume_per_server = "Log volume per server (time range)"
+log_volume_per_server_desc = "Total log bytes per server within the dashboard time range."
+agents = "Agents"
+agent_status = "Agent status per server"
+agent_status_desc = "Logs filtered = lines dropped on purpose through LOG_DROP_REGEX."
+lag_per_server = "Send delay per server"
+lag_per_server_desc = "Peaks mark periods where a server was cut off from PLG Stack (the backlog is sent afterwards)."
+
+[health.legend]
+late_accepted = "late, accepted"
+rejected_order = "rejected: out of order"
+rejected_bounds = "rejected: out of bounds"
+rejected_old = "rejected: too old"
+bytes_per_s = "bytes/s"
+lines_per_s = "lines/s"
+
+[health.col]
+version = "Version"
+lag = "Send delay"
+metrics_dropped = "Metrics dropped (1h)"
+logs_dropped = "Logs dropped (1h)"
+logs_filtered = "Logs filtered (1h)"
+
+[alert.host_not_reporting]
+title = "Server not reporting"
+summary = 'Server {{ .Labels.host }} ({{ .Labels.env }}) has sent no data for more than {not_reporting_after}'
+description = "The server is down, its network is cut, or the agent stopped. Check `systemctl status alloy` or `docker logs plg-agent`."
+
+[alert.disk_high]
+title = "Disk almost full"
+
+[alert.disk_critical]
+title = "Disk critical"
+
+[alert.disk_usage]
+summary = 'Disk {{ .Labels.mountpoint }} on {{ .Labels.host }} is {{ printf "%.0f" .Values.A.Value }}% full'
+
+[alert.disk_fill]
+title = "Disk predicted full within {forecast_horizon}"
+summary = 'Disk {{ .Labels.mountpoint }} on {{ .Labels.host }} is predicted to fill up within {forecast_horizon}'
+
+[alert.memory_high]
+title = "RAM almost exhausted"
+summary = 'RAM on {{ .Labels.host }} is {{ printf "%.0f" .Values.A.Value }}% used'
+
+[alert.cpu_high]
+title = "High CPU"
+summary = 'CPU on {{ .Labels.host }} at {{ printf "%.0f" .Values.A.Value }}% for {for_cpu_high}'
+
+[alert.container_restarting]
+title = "Container restarting often"
+summary = 'Service {{ .Labels.service }} on {{ .Labels.host }} restarted {{ printf "%.1f" .Values.A.Value }}x per replica on average within {restart_window}'
+
+[alert.database_down]
+title = "Database unreachable"
+summary = 'Database {{ .Labels.job }} on {{ .Labels.host }} is unreachable for its agent'
+description = "The database is down, or the agent's monitoring credentials are wrong."

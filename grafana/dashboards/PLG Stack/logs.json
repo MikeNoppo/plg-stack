@@ -354,6 +354,7 @@
     {
       "type": "logs",
       "title": "Log",
+      "description": "",
       "datasource": {
         "type": "loki",
         "uid": "loki"
