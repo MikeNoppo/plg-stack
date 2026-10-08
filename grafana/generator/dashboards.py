@@ -12,6 +12,8 @@ LEVELS = ["emerg", "alert", "crit", "error", "warning", "notice", "info", "debug
 # without the filter that reads as decades of delay.
 LAG = ('max by (host) (prometheus_remote_storage_highest_timestamp_in_seconds{job="alloy"%s})'
        ' - max by (host) (prometheus_remote_storage_queue_highest_sent_timestamp_seconds{job="alloy"%s} > 0)')
+HISTORY = '{from="state-history"}'
+FIRING = '| json | current=~"Alerting.*" | labels_severity=~"$severity"'
 
 
 def disk_pct(selector):
@@ -513,6 +515,53 @@ def uptime(S):
     ], L, time_from="now-7d")
 
 
+def alert_history(S):
+    t = S.t
+    G = 'job="plg-grafana"'
+    L = Layout()
+    L.add(stat(t("alerts.firing_now"), f'sum(grafana_alerting_alerts{{{G}, state="alerting"}}) or vector(0)',
+               thresholds=BAD_IF_ANY, color_mode="background"), 5, 4)
+    L.add(stat(t("alerts.pending_now"), f'sum(grafana_alerting_alerts{{{G}, state="pending"}}) or vector(0)',
+               thresholds=one_step("orange", 1), desc=t("alerts.pending_now_desc")), 5, 4)
+    L.add(stat(t("alerts.fired_in_range"), f'sum(count_over_time({HISTORY} {FIRING} [$__range])) or vector(0)',
+               ds=LOKI, desc=t("alerts.fired_in_range_desc")), 5, 4)
+    L.add(stat(t("alerts.history_failed"),
+               f'round(sum(increase(grafana_alerting_state_history_writes_failed_total{{{G}}}[$__range]))) or vector(0)',
+               thresholds=BAD_IF_ANY, desc=t("alerts.history_failed_desc")), 5, 4)
+    L.add(stat(t("alerts.evaluation_failures"),
+               f'round(sum(increase(grafana_alerting_rule_evaluation_failures_total{{{G}}}[$__range]))) or vector(0)',
+               thresholds=BAD_IF_ANY, desc=t("alerts.evaluation_failures_desc")), 4, 4)
+
+    L.add(timeseries(t("alerts.fired_per_rule"),
+                     [target(f'sum by (ruleTitle) (count_over_time({HISTORY} {FIRING} [$__auto]))', "{{ruleTitle}}",
+                             ds=LOKI)], ds=LOKI, stack=True, bars=True), 16, 8)
+    L.add(bargauge(t("alerts.most_frequent"),
+                   f'topk(10, sum by (ruleTitle) (count_over_time({HISTORY} {FIRING} [$__range])))', "{{ruleTitle}}",
+                   ds=LOKI), 8, 8)
+
+    line = ('{{.previous}} → {{.current}}  {{.ruleTitle}}'
+            '{{with .labels_host}}  host={{.}}{{end}}{{with .labels_env}} ({{.}}){{end}}'
+            '{{with .labels_mountpoint}}  {{.}}{{end}}{{with .labels_service}}  service={{.}}{{end}}'
+            '{{with .labels_job}}  job={{.}}{{end}}'
+            '{{with .values_A}}  ' + t("alerts.value") + '={{.}}{{end}}')
+    # Rules log Normal -> Normal (NoData) whenever Grafana starts; only real
+    # changes are listed.
+    L.add(logs(t("alerts.changes"),
+               f'{HISTORY} |~ "(?i)$search" | json | current=~"(${{state}}).*" | labels_severity=~"$severity" '
+               f'| (current !~ "Normal.*" or previous !~ "Normal.*") | line_format `{line}`',
+               desc=t("alerts.changes_desc")), 24, 16)
+
+    return dashboard("alert-history", t("alerts.title"), t("alerts.description"), [
+        custom_var("severity", t("var.severity"), ["critical", "warning"], all_value=".*"),
+        custom_var("state", t("var.state"), ["Alerting", "Pending", "Normal", "NoData", "Error", "Recovering"],
+                   all_value=".*"),
+        textbox("search", t("var.search")),
+    ], L, time_from="now-7d", links=[
+        dashboard_link(t("link.alert_rules"), "/alerting/list", icon="bolt", keep_time=False),
+        dashboard_link(t("link.grafana_history"), "/alerting/history", icon="doc", keep_time=False),
+    ])
+
+
 DASHBOARDS = {
     "fleet-overview": fleet,
     "host-detail": host_detail,
@@ -521,6 +570,7 @@ DASHBOARDS = {
     "databases": databases,
     "plg-stack-health": stack_health,
     "uptime": uptime,
+    "alert-history": alert_history,
 }
 
 

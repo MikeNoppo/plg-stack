@@ -79,9 +79,11 @@ def field(name):
 
 
 def timeseries(title, targets, unit="short", stack=False, minv=None, maxv=None, desc="", ds=PROM,
-               thresholds=None, links=None):
+               thresholds=None, links=None, bars=False):
     custom = {"fillOpacity": 15 if stack else 8, "lineWidth": 1, "showPoints": "never",
               "stacking": {"mode": "normal" if stack else "none", "group": "A"}}
+    if bars:
+        custom.update({"drawStyle": "bars", "fillOpacity": 80, "barAlignment": 0})
     defaults = {"unit": unit, "custom": custom}
     if minv is not None:
         defaults["min"] = minv
@@ -100,12 +102,12 @@ def timeseries(title, targets, unit="short", stack=False, minv=None, maxv=None, 
 
 
 def stat(title, expr, unit="short", thresholds=OK_ONLY, desc="", mappings=None, color_mode="value", legend="",
-         decimals=None):
+         ds=PROM, decimals=None):
     defaults = {"unit": unit, "thresholds": thresholds, "mappings": mappings or [], "color": {"mode": "thresholds"}}
     if decimals is not None:
         defaults["decimals"] = decimals
-    return {"type": "stat", "title": title, "description": desc, "datasource": PROM,
-            "targets": [target(expr, legend, instant=True)],
+    return {"type": "stat", "title": title, "description": desc, "datasource": ds,
+            "targets": [target(expr, legend, instant=True, ds=ds)],
             "fieldConfig": {"defaults": defaults, "overrides": []},
             "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False},
                         "colorMode": color_mode, "graphMode": "none", "textMode": "auto", "justifyMode": "center"}}
@@ -230,9 +232,9 @@ def textbox(name, label):
             "current": {"text": "", "value": ""}, "options": [{"selected": True, "text": "", "value": ""}]}
 
 
-def dashboard_link(title, url):
-    return {"type": "link", "title": title, "url": url, "icon": "dashboard", "tooltip": "", "asDropdown": False,
-            "includeVars": False, "keepTime": True, "targetBlank": False, "tags": []}
+def dashboard_link(title, url, icon="dashboard", keep_time=True):
+    return {"type": "link", "title": title, "url": url, "icon": icon, "tooltip": "", "asDropdown": False,
+            "includeVars": False, "keepTime": keep_time, "targetBlank": False, "tags": []}
 
 
 def dashboard(uid, title, description, variables, layout, time_from="now-6h", links=()):

@@ -32,6 +32,8 @@ level = "Level"
 search = "Search"
 service = "Service"
 source = "Source"
+severity = "Severity"
+state = "State"
 
 [link]
 host_detail = "Server details"
@@ -41,6 +43,8 @@ last_logs = "Last logs of this server"
 uptime = "Uptime of this server"
 service_logs = "Logs of this service"
 database_logs = "Logs of this database"
+alert_rules = "Alert rules"
+grafana_history = "History in Grafana Alerting"
 
 [fleet]
 title = "Fleet Overview"
@@ -225,6 +229,24 @@ availability = "Availability"
 down = "Not reporting"
 reboots = "Reboots"
 last_seen = "Last seen"
+
+[alerts]
+title = "Alert History"
+description = "Alert state changes over time, stored in Loki."
+firing_now = "Firing alerts"
+pending_now = "Pending"
+pending_now_desc = "The alert condition holds, but not yet for the rule's `for` duration."
+fired_in_range = "Alerts fired (time range)"
+fired_in_range_desc = "Number of state changes to Alerting."
+history_failed = "History writes failed"
+history_failed_desc = "State changes that could not be written to Loki, so the history in this dashboard is incomplete."
+evaluation_failures = "Failed evaluations"
+evaluation_failures_desc = "Rules that failed to evaluate, for example because of a query error or an unreachable data source."
+fired_per_rule = "Alerts fired per rule"
+most_frequent = "Most frequent"
+changes = "State changes"
+changes_desc = "One line per state change. Click a line to see all of its labels and values."
+value = "value"
 
 [alert.host_not_reporting]
 title = "Server not reporting"

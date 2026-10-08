@@ -32,6 +32,8 @@ level = "Level"
 search = "Cari"
 service = "Service"
 source = "Sumber"
+severity = "Severity"
+state = "Status"
 
 [link]
 host_detail = "Detail server"
@@ -41,6 +43,8 @@ last_logs = "Log terakhir server ini"
 uptime = "Uptime server ini"
 service_logs = "Log service ini"
 database_logs = "Log database ini"
+alert_rules = "Daftar alert"
+grafana_history = "Riwayat di Grafana Alerting"
 
 [fleet]
 title = "Fleet Overview"
@@ -225,6 +229,24 @@ availability = "Ketersediaan"
 down = "Tidak melapor"
 reboots = "Reboot"
 last_seen = "Terakhir terlihat"
+
+[alerts]
+title = "Riwayat Alert"
+description = "Perubahan status alert dari waktu ke waktu, disimpan di Loki."
+firing_now = "Alert aktif"
+pending_now = "Menunggu"
+pending_now_desc = "Kondisi alert sudah terpenuhi, tapi belum selama durasi `for` rule-nya."
+fired_in_range = "Alert berbunyi (rentang waktu)"
+fired_in_range_desc = "Jumlah perubahan status menjadi Alerting."
+history_failed = "Riwayat gagal disimpan"
+history_failed_desc = "Perubahan status yang gagal ditulis ke Loki, sehingga riwayat di dashboard ini tidak lengkap."
+evaluation_failures = "Evaluasi gagal"
+evaluation_failures_desc = "Rule yang gagal dievaluasi, misalnya karena query error atau datasource tidak bisa dihubungi."
+fired_per_rule = "Alert berbunyi per rule"
+most_frequent = "Paling sering berbunyi"
+changes = "Perubahan status"
+changes_desc = "Satu baris per perubahan status. Klik baris untuk melihat semua label dan nilainya."
+value = "nilai"
 
 [alert.host_not_reporting]
 title = "Server tidak mengirim data"

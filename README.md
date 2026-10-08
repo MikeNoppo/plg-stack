@@ -273,6 +273,9 @@ Dashboard di folder **PLG Stack**:
 - **Uptime**: persentase waktu tiap server mengirim data, total waktu tidak
   melapor, reboot, timeline status, serta ketersediaan database dan komponen
   stack.
+- **Riwayat Alert**: alert yang sedang aktif, seberapa sering tiap alert
+  berbunyi, evaluasi rule yang gagal, serta daftar perubahan status. Riwayatnya
+  disimpan Grafana di Loki.
 - **PLG Stack Health**: kesehatan komponen, ingest metrik dan log (termasuk
   data yang ditolak), disk metrik vs batas, volume per server, dan status agent.
 
