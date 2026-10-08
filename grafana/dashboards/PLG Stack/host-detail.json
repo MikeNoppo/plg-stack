@@ -1494,7 +1494,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max by (host) (prometheus_remote_storage_highest_timestamp_in_seconds{job=\"alloy\", host=\"$host\"}) - max by (host) (prometheus_remote_storage_queue_highest_sent_timestamp_seconds{job=\"alloy\", host=\"$host\"})",
+          "expr": "max by (host) (prometheus_remote_storage_highest_timestamp_in_seconds{job=\"alloy\", host=\"$host\"}) - max by (host) (prometheus_remote_storage_queue_highest_sent_timestamp_seconds{job=\"alloy\", host=\"$host\"} > 0)",
           "legendFormat": "tertunda",
           "range": true,
           "instant": false

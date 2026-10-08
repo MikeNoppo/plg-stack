@@ -8,8 +8,10 @@ ENV = 'env=~"$env"'
 NODE = f'job="node", {ENV}'
 DATABASE_UP = 'pg_up|mysql_up|redis_up|mongodb_up'
 LEVELS = ["emerg", "alert", "crit", "error", "warning", "notice", "info", "debug"]
+# The sent timestamp is 0 until an agent that restarted has sent something;
+# without the filter that reads as decades of delay.
 LAG = ('max by (host) (prometheus_remote_storage_highest_timestamp_in_seconds{job="alloy"%s})'
-       ' - max by (host) (prometheus_remote_storage_queue_highest_sent_timestamp_seconds{job="alloy"%s})')
+       ' - max by (host) (prometheus_remote_storage_queue_highest_sent_timestamp_seconds{job="alloy"%s} > 0)')
 
 
 def disk_pct(selector):
