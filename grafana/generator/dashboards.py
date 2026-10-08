@@ -1,7 +1,7 @@
 """The PLG Stack dashboards. Text comes from the language catalog, thresholds from config.toml."""
 from builders import (BAD_IF_ANY, LOKI, Layout, bargauge, colored, column, custom_var, dashboard,
                       dashboard_link, data_link, decimals, field, links, logs, one_step, query_var, stat,
-                      table, target, textbox, timeseries, unit, value_mapping)
+                      state_timeline, table, target, textbox, timeseries, unit, value_mapping)
 from settings import number
 
 ENV = 'env=~"$env"'
@@ -43,6 +43,10 @@ class Links:
     def logs(self, host, env=None, title="link.logs", **filters):
         params = [("env", env)] if env else []
         return data_link(self.t(title), "logs", params + [("host", host)] + list(filters.items()))
+
+    def uptime(self, host, env=None):
+        params = [("env", env)] if env else []
+        return data_link(self.t("link.uptime"), "uptime", params + [("host", host)])
 
     def per_series(self):
         """For time series panels: the server under the cursor."""
@@ -92,11 +96,11 @@ def fleet(S):
                    column(t("col.ram_total"), unit("bytes")), column(t("col.uptime"), unit("s")),
                    column(t("col.load5"), decimals(2)),
                    column(host, links(go.host_detail(row_host, row_env), go.containers(row_host, row_env),
-                                      go.logs(row_host, row_env)))],
+                                      go.logs(row_host, row_env), go.uptime(row_host, row_env)))],
         desc=t("fleet.all_servers_desc"), sort_by=cpu), 24, 10)
     L.add(table(t("fleet.silent_servers"), [("A", down)], {"host": host, "env": env},
                 overrides=[column(host, links(go.logs(row_host, row_env, title="link.last_logs"),
-                                              go.host_detail(row_host, row_env)))],
+                                              go.host_detail(row_host, row_env), go.uptime(row_host, row_env)))],
                 desc=t("fleet.silent_table_desc")), 24, 5)
 
     L.row(t("fleet.trends"))
@@ -210,6 +214,7 @@ def host_detail(S):
     ], L, links=[
         dashboard_link(t("link.containers"), "/d/containers/containers?var-host=$host"),
         dashboard_link(t("link.logs"), "/d/logs/logs?var-host=$host"),
+        dashboard_link(t("link.uptime"), "/d/uptime/uptime?var-host=$host"),
     ])
 
 
@@ -437,6 +442,77 @@ def stack_health(S):
     return dashboard("plg-stack-health", t("health.title"), t("health.description"), [], L)
 
 
+def uptime(S):
+    t = S.t
+    go = Links(S)
+    U = 'job="node", env=~"$env", host=~"$host"'
+    # 1 for every whole minute a server sent at least one sample.
+    present = f'(max by (host, env) (present_over_time(up{{{U}}}[1m])))[$__range:1m]'
+    minutes_up = f'sum_over_time({present})'
+    # Minutes from the server's first sample (or the start of the range) until
+    # now, counted like minutes_up, so a server added mid-range is not counted
+    # as down before it existed. Ranges exclude their start, hence the 1 ms.
+    first = f'clamp_min(min by (host, env) (min_over_time(timestamp(up{{{U}}})[$__range:1m])), time() - $__range_s + 0.001)'
+    minutes_total = f'(scalar(floor(vector(time() / 60))) - ceil({first} / 60) + 1)'
+    availability = f'100 * clamp_max({minutes_up} / {minutes_total}, 1)'
+    down = f'60 * clamp_min({minutes_total} - {minutes_up}, 0)'
+    reboots = f'sum by (host, env) (resets((node_time_seconds{{{U}}} - node_boot_time_seconds{{{U}}})[$__range:1m]))'
+
+    L = Layout()
+    L.add(stat(t("uptime.average"), f'avg({availability})', unit="percent", decimals=2,
+               thresholds=S.steps("availability"), desc=t("uptime.average_desc")), 6, 4)
+    L.add(stat(t("uptime.servers"), f'count({availability})'), 6, 4)
+    L.add(stat(t("uptime.total_down"), f'sum({down})', unit="s", thresholds=one_step("orange", 60)), 6, 4)
+    L.add(stat(t("uptime.reboots"), f'sum({reboots}) or vector(0)', thresholds=one_step("orange", 1),
+               desc=t("uptime.reboots_desc")), 6, 4)
+
+    host, avail = t("col.host"), t("uptime.col.availability")
+    row_host, row_env = "${__value.raw}", field(t("col.env"))
+    L.add(table(t("uptime.per_server"), [
+        ("A", availability),
+        ("B", down),
+        ("C", reboots),
+        ("D", f'max by (host, env) (node_time_seconds{{{U}}} - node_boot_time_seconds{{{U}}})'),
+        # The latest sample when there is one; the per-minute subquery only
+        # for servers that have been silent for longer than the lookback.
+        ("E", f'time() - max by (host, env) (timestamp(up{{{U}}}) or max_over_time(timestamp(up{{{U}}})[$__range:1m]))'),
+    ], {"host": host, "env": t("col.env"), "Value #A": avail, "Value #B": t("uptime.col.down"),
+        "Value #C": t("uptime.col.reboots"), "Value #D": t("col.uptime"), "Value #E": t("uptime.col.last_seen")},
+        overrides=[column(avail, unit("percent"), decimals(2), *colored(S.steps("availability"))),
+                   column(t("uptime.col.down"), unit("s")), column(t("uptime.col.reboots"), decimals(0)),
+                   column(t("col.uptime"), unit("s")), column(t("uptime.col.last_seen"), unit("s")),
+                   column(host, links(go.host_detail(row_host, row_env), go.logs(row_host, row_env)))],
+        desc=t("uptime.per_server_desc"), sort_by=avail, sort_desc=False), 24, 9)
+
+    # Per minute like minutes_up: 1 if the server sent data, 0 from its first
+    # sample on if it did not. A bar is red if any of its minutes is 0.
+    since_first = f'min by (host) (min_over_time(timestamp(up{{{U}}})[$__range:1m] @ end())) <= time()'
+    reporting = (f'min_over_time((max by (host) (present_over_time(up{{{U}}}[1m])) or 0 * ({since_first}))'
+                 f'[$__interval:1m])')
+    L.add(state_timeline(t("uptime.timeline"), reporting, "{{host}}",
+                         value_mapping((0, t("uptime.not_reporting"), "red"), (1, t("uptime.reporting"), "green")),
+                         desc=t("uptime.timeline_desc"), interval="1m"), 24, 9)
+
+    L.row(t("uptime.services"))
+    database = t("col.database")
+    L.add(table(t("uptime.databases"), [
+        ("A", f'100 * avg_over_time((min by (host, env, job) ({{__name__=~"{DATABASE_UP}", env=~"$env", host=~"$host"}}))[$__range:1m])')],
+        {"host": host, "env": t("col.env"), "job": database, "Value": avail},
+        overrides=[column(avail, unit("percent"), decimals(2), *colored(S.steps("availability"))),
+                   column(host, links(go.host_detail(row_host))),
+                   column(database, links(go.logs(field(host), title="link.database_logs",
+                                                  service="${__value.raw}", source="file")))],
+        desc=t("uptime.databases_desc"), sort_by=avail, sort_desc=False), 12, 8)
+    L.add(stat(t("uptime.components"), '100 * avg_over_time(up{job=~"plg-.*"}[$__range])', unit="percent",
+               decimals=2, legend="{{job}}", thresholds=S.steps("availability"), color_mode="background",
+               desc=t("uptime.components_desc")), 12, 8)
+
+    return dashboard("uptime", t("uptime.title"), t("uptime.description"), [
+        query_var("env", t("var.env"), 'label_values(up{job="node"}, env)'),
+        query_var("host", t("var.host"), 'label_values(up{job="node", env=~"$env"}, host)'),
+    ], L, time_from="now-7d")
+
+
 DASHBOARDS = {
     "fleet-overview": fleet,
     "host-detail": host_detail,
@@ -444,6 +520,7 @@ DASHBOARDS = {
     "logs": logs_dashboard,
     "databases": databases,
     "plg-stack-health": stack_health,
+    "uptime": uptime,
 }
 
 

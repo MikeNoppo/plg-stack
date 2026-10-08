@@ -442,7 +442,7 @@
     {
       "type": "table",
       "title": "Semua server",
-      "description": "Klik nama host untuk membuka detail, container, atau log server itu.",
+      "description": "Klik nama host untuk membuka detail, container, log, atau uptime server itu.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -806,6 +806,10 @@
                   {
                     "title": "Log server ini",
                     "url": "/d/logs/logs?var-env=${__data.fields.Env}&var-host=${__value.raw}&${__url_time_range}"
+                  },
+                  {
+                    "title": "Uptime server ini",
+                    "url": "/d/uptime/uptime?var-env=${__data.fields.Env}&var-host=${__value.raw}&${__url_time_range}"
                   }
                 ]
               }
@@ -928,6 +932,10 @@
                   {
                     "title": "Detail server",
                     "url": "/d/host-detail/host-detail?var-env=${__data.fields.Env}&var-host=${__value.raw}&${__url_time_range}"
+                  },
+                  {
+                    "title": "Uptime server ini",
+                    "url": "/d/uptime/uptime?var-env=${__data.fields.Env}&var-host=${__value.raw}&${__url_time_range}"
                   }
                 ]
               }

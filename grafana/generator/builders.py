@@ -99,8 +99,11 @@ def timeseries(title, targets, unit="short", stack=False, minv=None, maxv=None, 
                         "tooltip": {"mode": "multi", "sort": "desc"}}}
 
 
-def stat(title, expr, unit="short", thresholds=OK_ONLY, desc="", mappings=None, color_mode="value", legend=""):
+def stat(title, expr, unit="short", thresholds=OK_ONLY, desc="", mappings=None, color_mode="value", legend="",
+         decimals=None):
     defaults = {"unit": unit, "thresholds": thresholds, "mappings": mappings or [], "color": {"mode": "thresholds"}}
+    if decimals is not None:
+        defaults["decimals"] = decimals
     return {"type": "stat", "title": title, "description": desc, "datasource": PROM,
             "targets": [target(expr, legend, instant=True)],
             "fieldConfig": {"defaults": defaults, "overrides": []},
@@ -142,7 +145,7 @@ def logs(title, expr, desc=""):
                         "showLabels": False, "showCommonLabels": False}}
 
 
-def table(title, queries, columns, overrides=(), desc="", sort_by=None):
+def table(title, queries, columns, overrides=(), desc="", sort_by=None, sort_desc=True):
     """queries: (ref, expr) pairs. columns: ordered {source field: display name}."""
     index = {}
     rename = {}
@@ -163,7 +166,23 @@ def table(title, queries, columns, overrides=(), desc="", sort_by=None):
              "options": {"showHeader": True, "cellHeight": "sm",
                          "footer": {"show": False, "reducer": ["sum"], "fields": ""}}}
     if sort_by:
-        panel["options"]["sortBy"] = [{"displayName": sort_by, "desc": True}]
+        panel["options"]["sortBy"] = [{"displayName": sort_by, "desc": sort_desc}]
+    return panel
+
+
+def state_timeline(title, expr, legend, mappings, desc="", interval=None):
+    """States come from the value mappings; a thresholds color mode would
+    override them and merge every value into one state."""
+    panel = {"type": "state-timeline", "title": title, "description": desc, "datasource": PROM,
+            "targets": [target(expr, legend)],
+            "fieldConfig": {"defaults": {"mappings": mappings, "color": {"mode": "fixed", "fixedColor": "green"},
+                                         "custom": {"lineWidth": 0, "fillOpacity": 80}},
+                            "overrides": []},
+            "options": {"mergeValues": True, "showValue": "never", "alignValue": "left", "rowHeight": 0.8,
+                        "legend": {"showLegend": True, "displayMode": "list", "placement": "bottom"},
+                        "tooltip": {"mode": "single", "sort": "none"}}}
+    if interval:
+        panel["interval"] = interval
     return panel
 
 

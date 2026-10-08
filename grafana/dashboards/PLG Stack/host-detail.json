@@ -182,6 +182,18 @@
       "keepTime": true,
       "targetBlank": false,
       "tags": []
+    },
+    {
+      "type": "link",
+      "title": "Uptime server ini",
+      "url": "/d/uptime/uptime?var-host=$host",
+      "icon": "dashboard",
+      "tooltip": "",
+      "asDropdown": false,
+      "includeVars": false,
+      "keepTime": true,
+      "targetBlank": false,
+      "tags": []
     }
   ],
   "panels": [

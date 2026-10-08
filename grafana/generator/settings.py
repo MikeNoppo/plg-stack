@@ -47,6 +47,9 @@ def load_catalog(language):
 
 
 class Settings:
+    # Thresholds where a lower value is the worse one.
+    LOWER_IS_WORSE = {"availability"}
+
     def __init__(self, config, language=None):
         self.config = config
         self.language = language or config.get("language", "id")
@@ -96,6 +99,10 @@ class Settings:
     def steps(self, name):
         """Grafana thresholds: orange from `warning`, red from `critical`."""
         warning, critical = self.level(name, "warning"), self.level(name, "critical")
+        if name in self.LOWER_IS_WORSE:
+            return {"mode": "absolute", "steps": [{"color": "red", "value": None},
+                                                  {"color": "orange", "value": critical},
+                                                  {"color": "green", "value": warning}]}
         return {"mode": "absolute", "steps": [{"color": "green", "value": None},
                                               {"color": "orange", "value": warning},
                                               {"color": "red", "value": critical}]}
@@ -113,8 +120,10 @@ class Settings:
         if set(levels) != {"warning", "critical"}:
             raise ValueError(f"thresholds.{name} needs exactly `warning` and `critical`")
         warning, critical = self.level(name, "warning"), self.level(name, "critical")
-        if warning >= critical:
-            raise ValueError(f"thresholds.{name}: warning must be below critical")
+        worse_is_lower = name in self.LOWER_IS_WORSE
+        if (warning <= critical) if worse_is_lower else (warning >= critical):
+            relation = "above" if worse_is_lower else "below"
+            raise ValueError(f"thresholds.{name}: warning must be {relation} critical")
 
     def _params(self):
         params = {}

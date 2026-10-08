@@ -270,14 +270,17 @@ Dashboard di folder **PLG Stack**:
 - **Containers**: pemakaian per service/container dan log container per level.
 - **Logs**: pencarian log lintas server, filter per level.
 - **Databases**: PostgreSQL, MySQL/MariaDB, Redis, MongoDB.
+- **Uptime**: persentase waktu tiap server mengirim data, total waktu tidak
+  melapor, reboot, timeline status, serta ketersediaan database dan komponen
+  stack.
 - **PLG Stack Health**: kesehatan komponen, ingest metrik dan log (termasuk
   data yang ditolak), disk metrik vs batas, volume per server, dan status agent.
 
 **Navigasi**: klik nama host di tabel mana pun untuk membuka Host Detail,
-Containers, atau Logs yang sudah terfilter ke server itu, dengan rentang waktu
-yang sama. Klik garis pada grafik per server untuk membuka detail server
-tersebut; di Containers, untuk membuka log service-nya. Host Detail punya link
-ke container dan log server yang sama di kanan atas.
+Containers, Logs, atau Uptime yang sudah terfilter ke server itu, dengan
+rentang waktu yang sama. Klik garis pada grafik per server untuk membuka
+detail server tersebut; di Containers, untuk membuka log service-nya. Host
+Detail punya link ke container, log, dan uptime server yang sama di kanan atas.
 
 Alert rules (folder **Alerts**): server tidak mengirim data, disk >85% / >95%,
 disk diprediksi penuh dalam 24 jam, RAM >90%, CPU >90%, container sering
