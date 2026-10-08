@@ -224,6 +224,52 @@ assert_eq 2026-10-09 "$(cat "$loki/s3-since")" "Loki's volume is left alone whil
 assert_fails "local logs are not restored over it" grep -q ",loki latest" "$WORK/restic.log"
 assert_contains "$(cat "$WORK/stderr")" "volume Loki tidak dipulihkan" "the skipped volume is explained"
 
+# --- copy -----------------------------------------------------------------------
+
+# The source is /local; the destination exists once dest-config does.
+restic() {
+	printf '%s | from %s:%s\n' "$*" "${RESTIC_FROM_REPOSITORY:-}" "${RESTIC_FROM_PASSWORD:-}" >>"$WORK/restic.log"
+	case "$1" in
+	cat)
+		if [[ "$RESTIC_REPOSITORY" == /local ]]; then
+			[[ "$RESTIC_PASSWORD" == secret ]] || return 12
+			echo '{"chunker_polynomial":"abc"}'
+		else
+			cat "$WORK/dest-config" 2>/dev/null || return 10
+		fi
+		;;
+	init) echo '{"chunker_polynomial":"abc"}' >"$WORK/dest-config" ;;
+	esac
+}
+export RESTIC_REPOSITORY=s3:https://s3.example.com/bucket/plg-stack
+: >"$WORK/restic.log"
+(copy_runs /local) >/dev/null 2>"$WORK/stderr"
+assert_eq 0 "$?" "backups are copied from another repository"
+log="$(cat "$WORK/restic.log")"
+assert_contains "$log" "init --copy-chunker-params | from /local:secret" "a new repository takes the source's chunker parameters"
+assert_contains "$log" "copy --tag plg-stack | from /local:secret" "every run is copied, with BACKUP_PASSWORD for the source by default"
+assert_fails "matching chunker parameters need no warning" grep -q "dua kali" "$WORK/stderr"
+
+echo '{"chunker_polynomial":"def"}' >"$WORK/dest-config"
+: >"$WORK/restic.log"
+(copy_runs /local) >/dev/null 2>"$WORK/stderr"
+assert_contains "$(cat "$WORK/stderr")" "tersimpan dua kali" "a repository used before the copy is pointed out"
+assert_fails "an existing repository is not created again" grep -q "^init" "$WORK/restic.log"
+
+(RESTIC_FROM_PASSWORD=other copy_runs /local) >/dev/null 2>"$WORK/stderr"
+assert_eq 1 "$?" "a source that cannot be opened fails"
+assert_contains "$(cat "$WORK/stderr")" "isi RESTIC_FROM_PASSWORD" "a different source password is explained"
+(copy_runs) 2>/dev/null
+assert_eq 1 "$?" "the source is required"
+(copy_runs "$RESTIC_REPOSITORY") 2>/dev/null
+assert_eq 1 "$?" "a repository is not copied into itself"
+exec 8>"$TMP/lock"
+flock -n 8
+(copy_runs /local) 2>"$WORK/stderr"
+assert_contains "$(cat "$WORK/stderr")" "backup lain sedang berjalan" "a copy does not overlap a running backup"
+exec 8>&-
+export RESTIC_REPOSITORY=/local
+
 # --- host scripts ---------------------------------------------------------------
 
 mkdir -p "$WORK/bin" "$WORK/checkout/scripts"

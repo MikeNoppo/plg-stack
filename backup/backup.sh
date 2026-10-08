@@ -7,6 +7,7 @@
 #   backup.sh snapshots       list backup runs
 #   backup.sh check           verify the repository and 5% of its data
 #   backup.sh restore [RUN]   replace the volumes with a run (default: latest)
+#   backup.sh copy REPOSITORY copy the runs of another repository (e.g. /local)
 set -eu
 set -o pipefail
 
@@ -49,7 +50,7 @@ open_repository() {
 	0) ;;
 	10)
 		log "repository belum ada, membuat baru di $(repository)"
-		restic init >/dev/null
+		restic init "$@" >/dev/null
 		;;
 	11)
 		log "repository $(repository) masih dikunci proses restic lain; lock dari proses yang mati dilepas otomatis"
@@ -204,11 +205,15 @@ write_metrics() {
 	mv "$METRICS.tmp" "$METRICS"
 }
 
+take_lock() {
+	exec 9>"$TMP/lock"
+	flock -n 9 || die "backup lain sedang berjalan"
+}
+
 run_backup() {
 	require_config
 	mkdir -p "$TMP"
-	exec 9>"$TMP/lock"
-	flock -n 9 || die "backup lain sedang berjalan"
+	take_lock
 	STARTED="$(date +%s)"
 	RUN="$(date +%Y%m%d-%H%M%S)"
 	: >"$TMP/sizes"
@@ -348,6 +353,32 @@ restore() {
 	log "$restored komponen dipulihkan dari $run"
 }
 
+# Copies the runs of another repository, e.g. /local after BACKUP_REPOSITORY
+# moved to S3. Runs copied before are skipped, so it can be run again.
+copy_runs() {
+	require_config
+	from="${1:-}"
+	[ -n "$from" ] || die "sebutkan repository asal, mis.: sh /backup/backup.sh copy /local"
+	[ "$from" != "$RESTIC_REPOSITORY" ] || die "repository asal sama dengan BACKUP_REPOSITORY"
+	export RESTIC_FROM_REPOSITORY="$from" RESTIC_FROM_PASSWORD="${RESTIC_FROM_PASSWORD:-$RESTIC_PASSWORD}"
+	take_lock
+	if ! source_config="$(
+		export RESTIC_REPOSITORY="$from" RESTIC_PASSWORD="$RESTIC_FROM_PASSWORD"
+		restic unlock >/dev/null 2>&1 || true
+		restic cat config 2>"$TMP/error"
+	)"; then
+		cat "$TMP/error" >&2
+		die "repository asal $from tidak bisa dibuka; bila password-nya bukan BACKUP_PASSWORD, isi RESTIC_FROM_PASSWORD"
+	fi
+	# A new repository takes the source's chunker parameters, so the copied
+	# runs and later backups share the data they have in common.
+	open_repository --copy-chunker-params || exit 1
+	[ "$(restic cat config | jq -r .chunker_polynomial)" = "$(printf '%s' "$source_config" | jq -r .chunker_polynomial)" ] ||
+		log "$(repository) sudah dipakai sebelum copy, jadi data yang sama di backup lama dan baru tersimpan dua kali sampai backup lama terhapus retensi"
+	restic copy --tag plg-stack
+	log "semua backup dari $from sudah ada di $(repository)"
+}
+
 [ -z "${PLG_BACKUP_SOURCE_ONLY:-}" ] || return 0
 mkdir -p "$TMP"
 case "${1:-schedule}" in
@@ -359,5 +390,6 @@ check)
 	restic check --read-data-subset=5%
 	;;
 restore) restore "${2:-latest}" ;;
-*) die "perintah tidak dikenal: $1 (schedule, run, snapshots, check, restore)" ;;
+copy) copy_runs "${2:-}" ;;
+*) die "perintah tidak dikenal: $1 (schedule, run, snapshots, check, restore, copy)" ;;
 esac

@@ -232,6 +232,10 @@ if confirm "Aktifkan backup terjadwal?" "$([[ "$old_profiles" == *,backup,* ]] &
 		set_value BACKUP_S3_SECRET_ACCESS_KEY "$value"
 		ask value "Region (kosongkan bila tidak tahu)" "$(old BACKUP_S3_REGION)"
 		set_value BACKUP_S3_REGION "$value"
+		if [[ "$old_repo" == /local ]]; then
+			note "Setelah deploy, pindahkan backup lama dari $(old BACKUP_LOCAL_DIR /var/backups/plg-stack) ke S3 dengan"
+			note "backup.sh copy /local (lihat README, Backup dan restore)."
+		fi
 	else
 		set_value BACKUP_REPOSITORY /local
 		ask value "Folder backup di server ini" "$(old BACKUP_LOCAL_DIR /var/backups/plg-stack)" '^/.+'

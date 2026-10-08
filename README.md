@@ -387,6 +387,7 @@ Perintah manual, dari folder repo di server stack:
 docker compose exec backup sh /backup/backup.sh run         # backup sekarang
 docker compose exec backup sh /backup/backup.sh snapshots   # daftar backup
 docker compose exec backup sh /backup/backup.sh check       # verifikasi repository (membaca 5% data)
+docker compose exec backup sh /backup/backup.sh copy /local # salin backup dari repository lain
 scripts/restore.sh                                          # pulihkan backup terbaru (stack dihentikan dulu)
 scripts/restore.sh 20261008-020000                          # pulihkan backup tertentu
 ```
@@ -398,6 +399,16 @@ container-nya langsung (ganti `<app-name>`):
 docker exec $(docker ps -q -f label=com.docker.compose.project=<app-name> -f label=com.docker.compose.service=backup) \
   sh /backup/backup.sh run
 ```
+
+**Pindah tujuan backup** (misalnya dari `/local` ke S3): ubah
+`BACKUP_REPOSITORY` (atau jalankan ulang `setup.sh`), deploy ulang, lalu
+jalankan `backup.sh copy /local`. Semua backup lama ikut pindah dan tetap bisa
+dipulihkan dari tujuan baru. Jalankan sebelum backup terjadwal berikutnya: bila
+tujuan baru sudah terisi lebih dulu, data yang sama di backup lama dan baru
+tersimpan dua kali sampai backup lama terhapus retensi. Setelah `snapshots`
+menampilkan backup lama, isi folder `BACKUP_LOCAL_DIR` boleh dihapus. Kalau
+password repository lama berbeda, tambahkan `-e RESTIC_FROM_PASSWORD=...`
+setelah `exec`.
 
 **Simpan `BACKUP_PASSWORD` di luar server** (misalnya di password manager):
 tanpa password itu backup tidak bisa dibuka.
