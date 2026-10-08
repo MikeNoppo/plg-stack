@@ -272,7 +272,7 @@ schedule() {
 	fi
 	times="$(printf '%s' "${BACKUP_SCHEDULE:-02:00}" | tr ',' ' ')"
 	if [ "$times" = off ]; then
-		log "BACKUP_SCHEDULE=off; backup hanya dijalankan manual (scripts/backup.sh)"
+		log "BACKUP_SCHEDULE=off; backup hanya dijalankan manual: sh /backup/backup.sh run"
 		idle
 	fi
 	for at in $times; do

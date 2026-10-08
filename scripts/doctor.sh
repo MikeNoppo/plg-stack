@@ -420,7 +420,7 @@ if ((LOCAL)) && [[ "$PROFILES" == *,backup,* ]]; then
 	last="$(sed -n 's/^plg_backup_last_success_timestamp_seconds //p' <<<"$status")"
 	if [[ -z "$status" ]]; then
 		warn "Belum ada backup yang selesai"
-		hint "Jalankan sekarang: scripts/backup.sh"
+		hint "Jalankan sekarang: docker exec $(docker inspect -f '{{.Name}}' "$id" | tr -d /) sh /backup/backup.sh run"
 	elif [[ "$(sed -n 's/^plg_backup_last_status //p' <<<"$status")" != 1 ]]; then
 		fail "Backup terakhir gagal${last:+; yang terakhir berhasil $(ago $(($(date +%s) - last))) lalu}"
 		hint "Lihat penyebabnya: docker logs --tail 50 $(docker inspect -f '{{.Name}}' "$id" | tr -d /)"

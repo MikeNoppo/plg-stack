@@ -3,7 +3,8 @@
 #
 #   scripts/restore.sh [--project NAME] [--no-start] [--yes] [RUN]
 #
-# RUN is a backup from `scripts/backup.sh snapshots` (default: the latest).
+# RUN is one of the backups listed by `sh /backup/backup.sh snapshots` in the
+# backup container (default: the latest).
 # .env must hold the BACKUP_* values of the server that made the backup.
 # Standalone: run from the repo; the stack is started afterwards.
 # Dokploy: deploy once and Stop the app, then run this from the app's code

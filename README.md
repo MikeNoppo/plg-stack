@@ -48,7 +48,7 @@ Prinsip yang membuat stack ini mudah dipindah dan diatur:
 | `backup/` | Script yang berjalan di container `backup`: jadwal, backup restic, restore |
 | `agent/install.sh` | Installer agent satu perintah |
 | `agent/modules/` | Modul Alloy + `catalog.conf` (daftar modul untuk installer) |
-| `scripts/` | `setup.sh` (buat `.env`), `agent-token.sh` (token per server), `doctor.sh` (diagnosa), `backup.sh` / `restore.sh` |
+| `scripts/` | `setup.sh` (buat `.env`), `agent-token.sh` (token per server), `doctor.sh` (diagnosa), `restore.sh` (pulihkan backup) |
 | `tests/` | Unit test script (`tests/run.sh`) |
 
 ## 1. Deploy stack
@@ -358,12 +358,22 @@ Status backup terakhir tampil di **PLG Stack Health**. Arahkan
 `BACKUP_PING_URL` dan `BACKUP_FAIL_URL` ke layanan seperti healthchecks.io
 supaya ada peringatan saat backup gagal atau berhenti berjalan.
 
+Perintah manual, dari folder repo di server stack:
+
 ```bash
-scripts/backup.sh                     # backup sekarang
-scripts/backup.sh snapshots           # daftar backup
-scripts/backup.sh check               # verifikasi repository (membaca 5% data)
-scripts/restore.sh                    # pulihkan backup terbaru (stack dihentikan dulu)
-scripts/restore.sh 20261008-020000    # pulihkan backup tertentu
+docker compose exec backup sh /backup/backup.sh run         # backup sekarang
+docker compose exec backup sh /backup/backup.sh snapshots   # daftar backup
+docker compose exec backup sh /backup/backup.sh check       # verifikasi repository (membaca 5% data)
+scripts/restore.sh                                          # pulihkan backup terbaru (stack dihentikan dulu)
+scripts/restore.sh 20261008-020000                          # pulihkan backup tertentu
+```
+
+Di Dokploy, project compose diberi nama sesuai aplikasinya, jadi panggil
+container-nya langsung (ganti `<app-name>`):
+
+```bash
+docker exec $(docker ps -q -f label=com.docker.compose.project=<app-name> -f label=com.docker.compose.service=backup) \
+  sh /backup/backup.sh run
 ```
 
 **Simpan `BACKUP_PASSWORD` di luar server** (misalnya di password manager):
@@ -371,7 +381,8 @@ tanpa password itu backup tidak bisa dibuka.
 
 ## 5. Memindahkan stack ke server lain
 
-1. Di server lama: `scripts/backup.sh` untuk backup terakhir.
+1. Di server lama, buat backup terakhir dengan `backup.sh run` (lihat perintah di
+   [Backup dan restore](#4-backup-dan-restore)).
 2. Di server baru: clone repo ini dan salin `.env` (dengan `BACKUP_*` yang sama).
    Untuk tujuan `/local`, salin juga isi folder `BACKUP_LOCAL_DIR`.
 3. Pulihkan datanya:

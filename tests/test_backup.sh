@@ -223,16 +223,6 @@ chmod +x "$WORK/bin/docker"
 export FAKE_DOCKER_LOG="$WORK/docker.log"
 host_run() { PATH="$WORK/bin:$PATH" bash "$@"; }
 
-FAKE_CONTAINERS="" host_run "$ROOT/scripts/backup.sh" 2>"$WORK/stderr"
-assert_eq 1 "$?" "backup.sh fails without a backup container"
-assert_contains "$(cat "$WORK/stderr")" "COMPOSE_PROFILES" "it explains how to enable backups"
-: >"$FAKE_DOCKER_LOG"
-FAKE_CONTAINERS="abc123" host_run "$ROOT/scripts/backup.sh" snapshots
-assert_contains "$(cat "$FAKE_DOCKER_LOG")" "exec abc123 /bin/sh /backup/backup.sh snapshots" "backup.sh runs the command in the container"
-FAKE_CONTAINERS="a b" host_run "$ROOT/scripts/backup.sh" 2>/dev/null
-assert_eq 1 "$?" "several stacks need --project"
-assert_fails "unknown arguments are rejected" host_run "$ROOT/scripts/backup.sh" now 2>/dev/null
-
 cp "$ROOT/scripts/restore.sh" "$WORK/checkout/scripts/"
 printf "BACKUP_REPOSITORY='/local'\n" >"$WORK/checkout/.env"
 host_run "$WORK/checkout/scripts/restore.sh" --yes 2>"$WORK/stderr"
