@@ -1,7 +1,7 @@
 """The PLG Stack dashboards. Text comes from the language catalog, thresholds from config.toml."""
-from builders import (BAD_IF_ANY, LOKI, Layout, bargauge, colored, column, custom_var, dashboard, data_link,
-                      decimals, field, links, logs, one_step, query_var, stat, table, target, textbox, timeseries,
-                      unit, value_mapping)
+from builders import (BAD_IF_ANY, LOKI, Layout, bargauge, colored, column, custom_var, dashboard,
+                      dashboard_link, data_link, decimals, field, links, logs, one_step, query_var, stat,
+                      table, target, textbox, timeseries, unit, value_mapping)
 from settings import number
 
 ENV = 'env=~"$env"'
@@ -26,12 +26,36 @@ def silent(S, selector):
             f'unless group by (host, env) (max_over_time(up{{{selector}}}[{quiet}]))')
 
 
+class Links:
+    """Data links that open another dashboard filtered on one server."""
+
+    def __init__(self, S):
+        self.t = S.t
+
+    def host_detail(self, host, env=None):
+        params = [("env", env)] if env else []
+        return data_link(self.t("link.host_detail"), "host-detail", params + [("host", host)])
+
+    def containers(self, host, env=None):
+        params = [("env", env)] if env else []
+        return data_link(self.t("link.containers"), "containers", params + [("host", host)])
+
+    def logs(self, host, env=None, title="link.logs", **filters):
+        params = [("env", env)] if env else []
+        return data_link(self.t(title), "logs", params + [("host", host)] + list(filters.items()))
+
+    def per_series(self):
+        """For time series panels: the server under the cursor."""
+        return [self.host_detail("${__field.labels.host}")]
+
+
 def level_var(S):
     return custom_var("level", S.t("var.level"), LEVELS, all_value=".*")
 
 
 def fleet(S):
     t = S.t
+    go = Links(S)
     L = Layout()
     down = silent(S, NODE)
     L.add(stat(t("fleet.active_servers"), f'count(group by (host) (up{{{NODE}}}))'), 4, 4)
@@ -49,6 +73,7 @@ def fleet(S):
 
     host, env = t("col.host"), t("col.env")
     cpu, ram, disk = t("col.cpu"), t("col.ram"), t("fleet.col.fullest_disk")
+    row_host, row_env = "${__value.raw}", field(env)
     L.add(table(t("fleet.all_servers"), [
         ("A", f'100 * (1 - avg by (host, env) (rate(node_cpu_seconds_total{{{NODE}, mode="idle"}}[5m])))'),
         ("B", f'100 * (1 - max by (host, env) (node_memory_MemAvailable_bytes{{{NODE}}} / node_memory_MemTotal_bytes{{{NODE}}}))'),
@@ -66,28 +91,32 @@ def fleet(S):
                    column(disk, unit("percent"), decimals(1), *colored(S.steps("disk"))),
                    column(t("col.ram_total"), unit("bytes")), column(t("col.uptime"), unit("s")),
                    column(t("col.load5"), decimals(2)),
-                   column(host, links(data_link(t("link.host_detail"), "host-detail",
-                                                [("env", field(env)), ("host", "${__value.raw}")])))],
+                   column(host, links(go.host_detail(row_host, row_env), go.containers(row_host, row_env),
+                                      go.logs(row_host, row_env)))],
         desc=t("fleet.all_servers_desc"), sort_by=cpu), 24, 10)
     L.add(table(t("fleet.silent_servers"), [("A", down)], {"host": host, "env": env},
+                overrides=[column(host, links(go.logs(row_host, row_env, title="link.last_logs"),
+                                              go.host_detail(row_host, row_env)))],
                 desc=t("fleet.silent_table_desc")), 24, 5)
 
     L.row(t("fleet.trends"))
+    per_host = go.per_series()
     L.add(timeseries(t("fleet.cpu_per_server"),
                      [target(f'100 * (1 - avg by (host) (rate(node_cpu_seconds_total{{{NODE}, mode="idle"}}[$__rate_interval])))', "{{host}}")],
-                     unit="percent", minv=0, maxv=100, thresholds=S.steps("cpu")), 12, 8)
+                     unit="percent", minv=0, maxv=100, thresholds=S.steps("cpu"), links=per_host), 12, 8)
     L.add(timeseries(t("fleet.ram_per_server"),
                      [target(f'100 * (1 - max by (host) (node_memory_MemAvailable_bytes{{{NODE}}} / node_memory_MemTotal_bytes{{{NODE}}}))', "{{host}}")],
-                     unit="percent", minv=0, maxv=100, thresholds=S.steps("memory")), 12, 8)
+                     unit="percent", minv=0, maxv=100, thresholds=S.steps("memory"), links=per_host), 12, 8)
     L.add(timeseries(t("fleet.network_in"),
                      [target(f'sum by (host) (rate(node_network_receive_bytes_total{{{NODE}}}[$__rate_interval]))', "{{host}}")],
-                     unit="Bps"), 12, 8)
+                     unit="Bps", links=per_host), 12, 8)
     L.add(timeseries(t("fleet.network_out"),
                      [target(f'sum by (host) (rate(node_network_transmit_bytes_total{{{NODE}}}[$__rate_interval]))', "{{host}}")],
-                     unit="Bps"), 12, 8)
+                     unit="Bps", links=per_host), 12, 8)
     L.add(table(t("fleet.duplicate_names"),
                 [("A", 'count by (host) (count by (host, machine_id) (alloy_build_info{job="alloy", env=~"$env"})) > 1')],
                 {"host": host, "Value": t("fleet.col.machines")},
+                overrides=[column(host, links(go.host_detail(row_host)))],
                 desc=t("fleet.duplicate_names_desc")), 24, 5)
     return dashboard("fleet-overview", t("fleet.title"), t("fleet.description"),
                      [query_var("env", t("var.env"), 'label_values(up{job="node"}, env)')], L)
@@ -178,11 +207,15 @@ def host_detail(S):
         query_var("host", t("var.host"), 'label_values(up{job="node", env=~"$env"}, host)', multi=False, include_all=False),
         level_var(S),
         textbox("search", t("var.search")),
-    ], L)
+    ], L, links=[
+        dashboard_link(t("link.containers"), "/d/containers/containers?var-host=$host"),
+        dashboard_link(t("link.logs"), "/d/logs/logs?var-host=$host"),
+    ])
 
 
 def containers(S):
     t = S.t
+    go = Links(S)
     C = 'job="cadvisor", env=~"$env", host=~"$host", service=~"$service"'
     L = Layout()
     L.add(stat(t("common.running_containers"), f'count(container_start_time_seconds{{{C}}}) or vector(0)'), 6, 4)
@@ -205,22 +238,28 @@ def containers(S):
         "Value #B": cpu, "Value #C": t("col.ram"), "Value #D": t("containers.col.ram_limit"), "Value #A": t("col.uptime")},
         overrides=[column(cpu, unit("percent"), decimals(1)),
                    column(t("col.ram"), unit("bytes")), column(t("containers.col.ram_limit"), unit("bytes")),
-                   column(t("col.uptime"), unit("s"))],
+                   column(t("col.uptime"), unit("s")),
+                   column(host, links(go.host_detail("${__value.raw}"))),
+                   column(service, links(go.logs(field(host), title="link.service_logs",
+                                                 service="${__value.raw}", source="docker")))],
         sort_by=t("col.ram")), 24, 10)
 
+    service_logs = [go.logs("${__field.labels.host}", title="link.service_logs",
+                            service="${__field.labels.service}", source="docker")]
     L.row(t("containers.per_service"))
     L.add(timeseries(t("containers.cpu_per_service"),
                      [target(f'100 * sum by (host, service) (rate(container_cpu_usage_seconds_total{{{C}}}[$__rate_interval]))',
-                             "{{service}} @ {{host}}")], unit="percent", desc=t("containers.cpu_per_service_desc")), 12, 9)
+                             "{{service}} @ {{host}}")], unit="percent", desc=t("containers.cpu_per_service_desc"),
+                     links=service_logs), 12, 9)
     L.add(timeseries(t("containers.ram_per_service"),
                      [target(f'sum by (host, service) (container_memory_working_set_bytes{{{C}}})', "{{service}} @ {{host}}")],
-                     unit="bytes"), 12, 9)
+                     unit="bytes", links=service_logs), 12, 9)
     L.add(timeseries(t("containers.network_in"),
                      [target(f'sum by (host, service) (rate(container_network_receive_bytes_total{{{C}}}[$__rate_interval]))',
-                             "{{service}} @ {{host}}")], unit="Bps"), 12, 8)
+                             "{{service}} @ {{host}}")], unit="Bps", links=service_logs), 12, 8)
     L.add(timeseries(t("containers.network_out"),
                      [target(f'sum by (host, service) (rate(container_network_transmit_bytes_total{{{C}}}[$__rate_interval]))',
-                             "{{service}} @ {{host}}")], unit="Bps"), 12, 8)
+                             "{{service}} @ {{host}}")], unit="Bps", links=service_logs), 12, 8)
 
     L.row(t("containers.logs"))
     L.add(logs(t("common.logs"), '{source="docker", level=~"$level", env=~"$env", host=~"$host", service=~"$service"} |~ "(?i)$search"'),
@@ -239,15 +278,16 @@ def containers(S):
 
 def logs_dashboard(S):
     t = S.t
+    go = Links(S)
     F = 'level=~"$level", env=~"$env", host=~"$host", source=~"$source", service=~"$service"'
     L = Layout()
     L.add(timeseries(t("logs.volume_per_host"),
                      [target(f'sum by (host) (count_over_time({{{F}}} |~ "(?i)$search" [$__auto]))', "{{host}}", ds=LOKI)],
-                     stack=True, ds=LOKI), 12, 7)
+                     stack=True, ds=LOKI, links=go.per_series()), 12, 7)
     L.add(timeseries(t("logs.errors_per_host"),
                      [target(f'sum by (host) (count_over_time({{{F}}} |~ "(?i)(error|fatal|panic|exception|critical)" [$__auto]))',
                              "{{host}}", ds=LOKI)],
-                     stack=True, ds=LOKI, desc=t("logs.errors_per_host_desc")), 12, 7)
+                     stack=True, ds=LOKI, desc=t("logs.errors_per_host_desc"), links=go.per_series()), 12, 7)
     L.add(logs(t("common.logs"), f'{{{F}}} |~ "(?i)$search"'), 24, 20)
     return dashboard("logs", t("logs.title"), t("logs.description"), [
         query_var("env", t("var.env"), 'label_values(env)', ds=LOKI),
@@ -261,6 +301,7 @@ def logs_dashboard(S):
 
 def databases(S):
     t = S.t
+    go = Links(S)
     D = 'env=~"$env", host=~"$host"'
     L = Layout()
     host, database = t("col.host"), t("col.database")
@@ -268,7 +309,10 @@ def databases(S):
         ("A", f'min by (host, env, job) ({{__name__=~"{DATABASE_UP}", {D}}})')],
         {"host": host, "env": t("col.env"), "job": database, "Value": t("col.status")},
         overrides=[column(t("col.status"), {"id": "mappings", "value": value_mapping((0, "DOWN", "red"), (1, "UP", "green"))},
-                          {"id": "custom.cellOptions", "value": {"type": "color-background"}})]), 24, 6)
+                          {"id": "custom.cellOptions", "value": {"type": "color-background"}}),
+                   column(host, links(go.host_detail("${__value.raw}"))),
+                   column(database, links(go.logs(field(host), title="link.database_logs",
+                                                  service="${__value.raw}", source="file")))]), 24, 6)
 
     L.row("PostgreSQL")
     L.add(timeseries(t("databases.connections_per_db"),
@@ -321,6 +365,7 @@ def databases(S):
 
 def stack_health(S):
     t = S.t
+    go = Links(S)
     P = 'job="plg-prometheus"'
     LK = 'job="plg-loki"'
     L = Layout()
@@ -383,10 +428,11 @@ def stack_health(S):
         "Value #E": t("health.col.logs_filtered")},
         overrides=[column(lag, unit("s"), *colored(S.steps("agent_lag"))),
                    column(t("health.col.metrics_dropped"), *colored(dropped, "color-text")),
-                   column(t("health.col.logs_dropped"), *colored(dropped, "color-text"))],
+                   column(t("health.col.logs_dropped"), *colored(dropped, "color-text")),
+                   column(host, links(go.host_detail("${__value.raw}")))],
         desc=t("health.agent_status_desc"), sort_by=lag), 24, 9)
     L.add(timeseries(t("health.lag_per_server"), [target(LAG % ("", ""), "{{host}}")], unit="s", minv=0,
-                     thresholds=S.steps("agent_lag"), desc=t("health.lag_per_server_desc")), 24, 8)
+                     thresholds=S.steps("agent_lag"), desc=t("health.lag_per_server_desc"), links=go.per_series()), 24, 8)
 
     return dashboard("plg-stack-health", t("health.title"), t("health.description"), [], L)
 

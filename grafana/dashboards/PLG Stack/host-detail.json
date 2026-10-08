@@ -158,6 +158,30 @@
       "title": "Dashboards",
       "includeVars": false,
       "keepTime": true
+    },
+    {
+      "type": "link",
+      "title": "Container server ini",
+      "url": "/d/containers/containers?var-host=$host",
+      "icon": "dashboard",
+      "tooltip": "",
+      "asDropdown": false,
+      "includeVars": false,
+      "keepTime": true,
+      "targetBlank": false,
+      "tags": []
+    },
+    {
+      "type": "link",
+      "title": "Log server ini",
+      "url": "/d/logs/logs?var-host=$host",
+      "icon": "dashboard",
+      "tooltip": "",
+      "asDropdown": false,
+      "includeVars": false,
+      "keepTime": true,
+      "targetBlank": false,
+      "tags": []
     }
   ],
   "panels": [

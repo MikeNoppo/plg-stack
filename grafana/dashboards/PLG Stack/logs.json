@@ -266,7 +266,13 @@
               "mode": "normal",
               "group": "A"
             }
-          }
+          },
+          "links": [
+            {
+              "title": "Detail server",
+              "url": "/d/host-detail/host-detail?var-host=${__field.labels.host}&${__url_time_range}"
+            }
+          ]
         },
         "overrides": []
       },
@@ -324,7 +330,13 @@
               "mode": "normal",
               "group": "A"
             }
-          }
+          },
+          "links": [
+            {
+              "title": "Detail server",
+              "url": "/d/host-detail/host-detail?var-host=${__field.labels.host}&${__url_time_range}"
+            }
+          ]
         },
         "overrides": []
       },

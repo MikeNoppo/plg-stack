@@ -79,7 +79,7 @@ def field(name):
 
 
 def timeseries(title, targets, unit="short", stack=False, minv=None, maxv=None, desc="", ds=PROM,
-               thresholds=None):
+               thresholds=None, links=None):
     custom = {"fillOpacity": 15 if stack else 8, "lineWidth": 1, "showPoints": "never",
               "stacking": {"mode": "normal" if stack else "none", "group": "A"}}
     defaults = {"unit": unit, "custom": custom}
@@ -90,6 +90,8 @@ def timeseries(title, targets, unit="short", stack=False, minv=None, maxv=None, 
     if thresholds:
         defaults["thresholds"] = thresholds
         custom["thresholdsStyle"] = {"mode": "dashed"}
+    if links:
+        defaults["links"] = links
     return {"type": "timeseries", "title": title, "description": desc, "datasource": ds, "targets": targets,
             "fieldConfig": {"defaults": defaults, "overrides": []},
             "options": {"legend": {"displayMode": "table", "placement": "right", "showLegend": True,
@@ -209,13 +211,18 @@ def textbox(name, label):
             "current": {"text": "", "value": ""}, "options": [{"selected": True, "text": "", "value": ""}]}
 
 
-def dashboard(uid, title, description, variables, layout, time_from="now-6h"):
+def dashboard_link(title, url):
+    return {"type": "link", "title": title, "url": url, "icon": "dashboard", "tooltip": "", "asDropdown": False,
+            "includeVars": False, "keepTime": True, "targetBlank": False, "tags": []}
+
+
+def dashboard(uid, title, description, variables, layout, time_from="now-6h", links=()):
     return {"uid": uid, "title": title, "description": description, "tags": [TAG],
             "timezone": "browser", "editable": True, "graphTooltip": 1, "schemaVersion": 39, "version": 1,
             "time": {"from": time_from, "to": "now"}, "refresh": "1m",
             "templating": {"list": variables}, "annotations": {"list": []},
             "links": [{"type": "dashboards", "tags": [TAG], "asDropdown": True, "title": "Dashboards",
-                       "includeVars": False, "keepTime": True}],
+                       "includeVars": False, "keepTime": True}, *links],
             "panels": layout.panels}
 
 

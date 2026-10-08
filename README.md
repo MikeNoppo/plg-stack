@@ -273,6 +273,12 @@ Dashboard di folder **PLG Stack**:
 - **PLG Stack Health**: kesehatan komponen, ingest metrik dan log (termasuk
   data yang ditolak), disk metrik vs batas, volume per server, dan status agent.
 
+**Navigasi**: klik nama host di tabel mana pun untuk membuka Host Detail,
+Containers, atau Logs yang sudah terfilter ke server itu, dengan rentang waktu
+yang sama. Klik garis pada grafik per server untuk membuka detail server
+tersebut; di Containers, untuk membuka log service-nya. Host Detail punya link
+ke container dan log server yang sama di kanan atas.
+
 Alert rules (folder **Alerts**): server tidak mengirim data, disk >85% / >95%,
 disk diprediksi penuh dalam 24 jam, RAM >90%, CPU >90%, container sering
 restart, dan database tidak bisa diakses. Angka-angka itu default dari

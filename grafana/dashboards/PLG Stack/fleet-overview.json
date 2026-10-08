@@ -442,7 +442,7 @@
     {
       "type": "table",
       "title": "Semua server",
-      "description": "Klik nama host untuk membuka detail.",
+      "description": "Klik nama host untuk membuka detail, container, atau log server itu.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -796,8 +796,16 @@
                 "id": "links",
                 "value": [
                   {
-                    "title": "Buka detail server",
+                    "title": "Detail server",
                     "url": "/d/host-detail/host-detail?var-env=${__data.fields.Env}&var-host=${__value.raw}&${__url_time_range}"
+                  },
+                  {
+                    "title": "Container server ini",
+                    "url": "/d/containers/containers?var-env=${__data.fields.Env}&var-host=${__value.raw}&${__url_time_range}"
+                  },
+                  {
+                    "title": "Log server ini",
+                    "url": "/d/logs/logs?var-env=${__data.fields.Env}&var-host=${__value.raw}&${__url_time_range}"
                   }
                 ]
               }
@@ -833,7 +841,7 @@
     {
       "type": "table",
       "title": "Server tidak mengirim data",
-      "description": "Kosong berarti semua server sehat.",
+      "description": "Kosong berarti semua server sehat. Klik nama host untuk melihat log terakhir sebelum server berhenti mengirim data.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -903,7 +911,29 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Host"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Log terakhir server ini",
+                    "url": "/d/logs/logs?var-env=${__data.fields.Env}&var-host=${__value.raw}&${__url_time_range}"
+                  },
+                  {
+                    "title": "Detail server",
+                    "url": "/d/host-detail/host-detail?var-env=${__data.fields.Env}&var-host=${__value.raw}&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "showHeader": true,
@@ -991,7 +1021,13 @@
                 "value": 95
               }
             ]
-          }
+          },
+          "links": [
+            {
+              "title": "Detail server",
+              "url": "/d/host-detail/host-detail?var-host=${__field.labels.host}&${__url_time_range}"
+            }
+          ]
         },
         "overrides": []
       },
@@ -1072,7 +1108,13 @@
                 "value": 95
               }
             ]
-          }
+          },
+          "links": [
+            {
+              "title": "Detail server",
+              "url": "/d/host-detail/host-detail?var-host=${__field.labels.host}&${__url_time_range}"
+            }
+          ]
         },
         "overrides": []
       },
@@ -1131,7 +1173,13 @@
               "mode": "none",
               "group": "A"
             }
-          }
+          },
+          "links": [
+            {
+              "title": "Detail server",
+              "url": "/d/host-detail/host-detail?var-host=${__field.labels.host}&${__url_time_range}"
+            }
+          ]
         },
         "overrides": []
       },
@@ -1190,7 +1238,13 @@
               "mode": "none",
               "group": "A"
             }
-          }
+          },
+          "links": [
+            {
+              "title": "Detail server",
+              "url": "/d/host-detail/host-detail?var-host=${__field.labels.host}&${__url_time_range}"
+            }
+          ]
         },
         "overrides": []
       },
@@ -1290,7 +1344,25 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Host"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Detail server",
+                    "url": "/d/host-detail/host-detail?var-host=${__value.raw}&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "showHeader": true,

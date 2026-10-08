@@ -1102,6 +1102,23 @@
                 }
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Host"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Detail server",
+                    "url": "/d/host-detail/host-detail?var-host=${__value.raw}&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
           }
         ]
       },
@@ -1183,7 +1200,13 @@
                 "value": 600
               }
             ]
-          }
+          },
+          "links": [
+            {
+              "title": "Detail server",
+              "url": "/d/host-detail/host-detail?var-host=${__field.labels.host}&${__url_time_range}"
+            }
+          ]
         },
         "overrides": []
       },

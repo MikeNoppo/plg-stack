@@ -217,6 +217,40 @@
                 }
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Host"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Detail server",
+                    "url": "/d/host-detail/host-detail?var-host=${__value.raw}&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Database"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Log database ini",
+                    "url": "/d/logs/logs?var-host=${__data.fields.Host}&var-service=${__value.raw}&var-source=file&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
           }
         ]
       },
