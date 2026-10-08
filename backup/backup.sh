@@ -127,8 +127,12 @@ link_loki() {
 
 stage_prometheus() { stage_links prometheus; }
 
+# Logs on S3 are not backed up. Restoring local ones would also replace
+# /loki/s3-since, and Loki would then look for its S3 logs on the disk.
+loki_on_s3() { [ "${LOKI_STORAGE:-filesystem}" = s3 ]; }
+
 stage_loki() {
-	if [ "${LOKI_STORAGE:-filesystem}" != filesystem ]; then
+	if loki_on_s3; then
 		log "Loki menyimpan log di S3, jadi datanya tidak ikut dibackup"
 		return 2
 	fi
@@ -326,6 +330,10 @@ restore() {
 	restored=0
 	for target in $ALL_TARGETS; do
 		[ -d "$VOLUMES/$target" ] || continue
+		if [ "$target" = loki ] && loki_on_s3; then
+			log "Loki menyimpan log di S3, jadi volume Loki tidak dipulihkan"
+			continue
+		fi
 		count="$(restic snapshots --host "$HOST" --tag "$filter,$target" --json | jq length)"
 		if [ "$count" = 0 ]; then
 			log "tidak ada backup $target untuk $run, dilewati"

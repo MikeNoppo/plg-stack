@@ -373,9 +373,9 @@ backup setiap hari pada jam `BACKUP_SCHEDULE` (zona waktu `TZ`):
   atau `/local` (folder `BACKUP_LOCAL_DIR` di server ini).
 - **Retensi**: `BACKUP_KEEP_DAILY`, `BACKUP_KEEP_WEEKLY`, `BACKUP_KEEP_MONTHLY`;
   backup yang lebih lama dihapus otomatis.
-- **Isi**: metrik, log (bila Loki menyimpan di disk lokal; di mode S3 log sudah
-  ada di bucket), database Grafana (bila SQLite), dan sertifikat TLS. Bisa
-  dipilih lewat `BACKUP_TARGETS`.
+- **Isi**: metrik, log (bila `LOKI_STORAGE=filesystem`; log di S3 tidak ikut
+  backup maupun restore), database Grafana (bila SQLite), dan sertifikat TLS.
+  Bisa dipilih lewat `BACKUP_TARGETS`.
 
 Status backup terakhir tampil di **PLG Stack Health**. Arahkan
 `BACKUP_PING_URL` dan `BACKUP_FAIL_URL` ke layanan seperti healthchecks.io
