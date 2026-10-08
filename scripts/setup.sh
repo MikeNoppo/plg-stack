@@ -47,6 +47,12 @@ confirm() {
 
 random_password() { od -An -N16 -tx1 /dev/urandom | tr -d ' \n'; }
 
+local_timezone() {
+	timedatectl show -p Timezone --value 2>/dev/null ||
+		readlink /etc/localtime 2>/dev/null | sed -n 's#.*/zoneinfo/##p' | grep . ||
+		echo UTC
+}
+
 DURATION='^[0-9]+(ms|s|m|h|d|w|y)$'
 SIZE='^[0-9]+(B|KB|MB|GB|TB|PB)$'
 
@@ -108,16 +114,15 @@ set_value GRAFANA_ADMIN_PASSWORD "$value"
 
 info "Self-monitoring"
 note "Server tempat stack ini berjalan ikut dipantau seperti server lain (metrik, log, container)."
-profiles="$(old COMPOSE_PROFILES self-monitoring)"
-if confirm "Pantau server stack ini sendiri?" "$([[ ",$profiles," == *",self-monitoring,"* ]] && echo y || echo n)"; then
-	set_value COMPOSE_PROFILES self-monitoring
+old_profiles=",$(old COMPOSE_PROFILES self-monitoring),"
+PROFILES=()
+if confirm "Pantau server stack ini sendiri?" "$([[ "$old_profiles" == *,self-monitoring,* ]] && echo y || echo n)"; then
+	PROFILES+=(self-monitoring)
 	ask value "Nama server ini di dashboard" "$(old SELF_MONITORING_NAME plg-stack)" '^[A-Za-z0-9][A-Za-z0-9._-]*$'
 	set_value SELF_MONITORING_NAME "$value"
 	ask value "Environment" "$(old SELF_MONITORING_ENV production)" '^[A-Za-z0-9][A-Za-z0-9._-]*$'
 	set_value SELF_MONITORING_ENV "$value"
 	set_value SELF_MONITORING_TOKEN "$(old SELF_MONITORING_TOKEN "$(random_password)")"
-else
-	set_value COMPOSE_PROFILES ""
 fi
 
 info "Watchdog (heartbeat eksternal)"
@@ -200,6 +205,64 @@ set_value LOG_MAX_SIZE "$value"
 ask value "Jumlah file log yang disimpan" "$(old LOG_MAX_FILE 3)" '^[0-9]+$'
 set_value LOG_MAX_FILE "$value"
 
+info "Backup"
+note "Backup harian terenkripsi (restic) untuk metrik, log, Grafana, dan sertifikat TLS, dibuat tanpa"
+note "menghentikan stack. Setelah backup pertama, hanya data yang berubah yang diunggah."
+if confirm "Aktifkan backup terjadwal?" "$([[ "$old_profiles" == *,backup,* ]] && echo y || echo n)"; then
+	PROFILES+=(backup)
+	echo "  s3    : bucket S3 / S3-compatible (AWS, MinIO, Cloudflare R2, Wasabi); aman walau server ini rusak."
+	echo "  local : folder di server ini; salin ke tempat lain secara berkala."
+	old_repo="$(old BACKUP_REPOSITORY)"
+	ask KIND "Tujuan (s3/local)" "$([[ "$old_repo" == /local ]] && echo local || echo s3)" '^(s3|local)$'
+	if [[ "$KIND" == s3 ]]; then
+		endpoint=s3.amazonaws.com bucket="" prefix=plg-stack
+		if [[ "$old_repo" =~ ^s3:(https?://)?([^/]+)/([^/]+)/?(.*)$ ]]; then
+			endpoint="${BASH_REMATCH[2]}" bucket="${BASH_REMATCH[3]}" prefix="${BASH_REMATCH[4]}"
+		fi
+		note "AWS: s3.<region>.amazonaws.com. MinIO, R2, Wasabi: endpoint dari penyedianya."
+		ask endpoint "Endpoint S3" "$endpoint" '^[A-Za-z0-9.:-]+$'
+		ask bucket "Bucket" "$bucket" '^[A-Za-z0-9][A-Za-z0-9.-]+$'
+		ask prefix "Folder di dalam bucket" "$prefix" '^[A-Za-z0-9._/-]*$'
+		set_value BACKUP_REPOSITORY "s3:https://$endpoint/$bucket${prefix:+/$prefix}"
+		ask value "Access key ID" "$(old BACKUP_S3_ACCESS_KEY_ID)"
+		set_value BACKUP_S3_ACCESS_KEY_ID "$value"
+		ask value "Secret access key" "$(old BACKUP_S3_SECRET_ACCESS_KEY)"
+		set_value BACKUP_S3_SECRET_ACCESS_KEY "$value"
+		ask value "Region (kosongkan bila tidak tahu)" "$(old BACKUP_S3_REGION)"
+		set_value BACKUP_S3_REGION "$value"
+	else
+		set_value BACKUP_REPOSITORY /local
+		ask value "Folder backup di server ini" "$(old BACKUP_LOCAL_DIR /var/backups/plg-stack)" '^/.+'
+		set_value BACKUP_LOCAL_DIR "$value"
+	fi
+	note "Password ini mengenkripsi backup. Simpan salinannya di luar server ini (mis. password manager);"
+	note "tanpa password ini backup tidak bisa dibuka, termasuk saat memindahkan stack."
+	ask value "Password backup" "$(old BACKUP_PASSWORD "$(random_password)")"
+	set_value BACKUP_PASSWORD "$value"
+	ask value "Jam backup harian (HH:MM, pisahkan koma untuk beberapa kali sehari)" "$(old BACKUP_SCHEDULE 02:00)" \
+		'^([01][0-9]|2[0-3]):[0-5][0-9](,([01][0-9]|2[0-3]):[0-5][0-9])*$'
+	set_value BACKUP_SCHEDULE "$value"
+	ask value "Zona waktu jam backup" "$(old TZ "$(local_timezone)")" '^[A-Za-z_]+(/[A-Za-z0-9_+-]+)*$'
+	set_value TZ "$value"
+	note "Backup lama dihapus otomatis; yang disimpan:"
+	ask value "Backup harian terakhir" "$(old BACKUP_KEEP_DAILY 7)" '^[0-9]+$'
+	set_value BACKUP_KEEP_DAILY "$value"
+	ask value "Backup mingguan terakhir" "$(old BACKUP_KEEP_WEEKLY 4)" '^[0-9]+$'
+	set_value BACKUP_KEEP_WEEKLY "$value"
+	ask value "Backup bulanan terakhir" "$(old BACKUP_KEEP_MONTHLY 6)" '^[0-9]+$'
+	set_value BACKUP_KEEP_MONTHLY "$value"
+	note "Opsional: URL yang dipanggil setiap backup berhasil (mis. healthchecks.io), supaya ada"
+	note "peringatan bila backup berhenti berjalan."
+	ask value "URL ping backup" "$(old BACKUP_PING_URL)" '^(https?://.+)?$'
+	set_value BACKUP_PING_URL "$value"
+	[[ " ${PROFILES[*]} " == *" self-monitoring "* ]] ||
+		note "Status backup tampil di dashboard PLG Stack Health bila self-monitoring aktif."
+fi
+set_value COMPOSE_PROFILES "$(
+	IFS=,
+	echo "${PROFILES[*]}"
+)"
+
 if [[ "$MODE" == standalone ]]; then
 	set_value COMPOSE_FILE compose.yaml:compose.standalone.yaml
 else
@@ -247,3 +310,6 @@ cat <<EOF
   Tambah server yang dipantau: scripts/agent-token.sh add NAMA-SERVER
   (membuat token untuk server itu dan menampilkan perintah install agent-nya)
 EOF
+if [[ " ${PROFILES[*]} " == *" backup "* ]]; then
+	echo "  Simpan BACKUP_PASSWORD dari .env di luar server ini; tanpa itu backup tidak bisa dipulihkan."
+fi

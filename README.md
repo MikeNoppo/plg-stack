@@ -64,8 +64,9 @@ Script menanyakan, masing-masing dengan penjelasan: mode (dokploy/standalone),
 domain, login Grafana, self-monitoring, URL watchdog, profil resource
 (small/medium/large/custom), retensi metrik dan log (termasuk retensi singkat
 untuk journald dan environment development), jendela data offline, penyimpanan
-log (disk lokal atau S3), dan rotasi log container. Menjalankan ulang `setup.sh`
-memakai nilai lama sebagai default dan tidak menghapus pengaturan lain di `.env`.
+log (disk lokal atau S3), rotasi log container, dan backup terjadwal (S3 atau
+disk lokal). Menjalankan ulang `setup.sh` memakai nilai lama sebagai default dan
+tidak menghapus pengaturan lain di `.env`.
 
 ### A. Di Dokploy
 
@@ -331,9 +332,9 @@ menolak file lain di sana.
 
 ## 4. Backup dan restore
 
-Isi `BACKUP_*` di `.env` (lihat `.env.example`), lalu tambahkan `backup` ke
-`COMPOSE_PROFILES`. Service `backup` membuat backup setiap hari pada jam
-`BACKUP_SCHEDULE` (zona waktu `TZ`):
+Aktifkan lewat `scripts/setup.sh` (bagian Backup), atau isi `BACKUP_*` di
+`.env` lalu tambahkan `backup` ke `COMPOSE_PROFILES`. Service `backup` membuat
+backup setiap hari pada jam `BACKUP_SCHEDULE` (zona waktu `TZ`):
 
 - **Tanpa downtime.** Data Prometheus dan Loki di-snapshot dengan hard link
   (instan, tanpa menyalin data), Loki diminta menulis log yang masih di memori
