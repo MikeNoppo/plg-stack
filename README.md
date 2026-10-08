@@ -48,7 +48,7 @@ Prinsip yang membuat stack ini mudah dipindah dan diatur:
 | `backup/` | Script yang berjalan di container `backup`: jadwal, backup restic, restore |
 | `agent/install.sh` | Installer agent satu perintah |
 | `agent/modules/` | Modul Alloy + `catalog.conf` (daftar modul untuk installer) |
-| `scripts/` | `setup.sh` (buat `.env`), `agent-token.sh` (token per server), `backup.sh` / `restore.sh` |
+| `scripts/` | `setup.sh` (buat `.env`), `agent-token.sh` (token per server), `doctor.sh` (diagnosa), `backup.sh` / `restore.sh` |
 | `tests/` | Unit test script (`tests/run.sh`) |
 
 ## 1. Deploy stack
@@ -67,6 +67,9 @@ untuk journald dan environment development), jendela data offline, penyimpanan
 log (disk lokal atau S3), rotasi log container, dan backup terjadwal (S3 atau
 disk lokal). Menjalankan ulang `setup.sh` memakai nilai lama sebagai default dan
 tidak menghapus pengaturan lain di `.env`.
+
+Setelah deploy, cek semuanya dengan `scripts/doctor.sh` (lihat
+[Troubleshooting](#troubleshooting)).
 
 ### A. Di Dokploy
 
@@ -407,10 +410,21 @@ tests/run.sh
 Test berjalan tanpa root, Docker, atau jaringan: parser katalog modul,
 penyimpanan konfigurasi agent, pemilihan modul, batas memori, token gateway,
 `agent-token.sh`, generator dashboard (hasilnya sesuai config, struktur
-dashboard, threshold panel sama dengan alert), serta backup dan restore
-(dengan restic tiruan). Test generator butuh Python 3.11+.
+dashboard, threshold panel sama dengan alert), backup dan restore (dengan
+restic tiruan), dan `doctor.sh`. Test generator butuh Python 3.11+.
 
 ## Troubleshooting
+
+Mulai dari `scripts/doctor.sh`. Script ini memeriksa konfigurasi, DNS,
+sertifikat TLS, endpoint ingest, container, data yang ditolak Prometheus atau
+Loki, server yang berhenti melapor, token tanpa data, backup, dan disk, lalu
+menyarankan perbaikannya. Di laptop, yang dicek hanya konfigurasi dan endpoint
+publik; di server stack, semuanya.
+
+```bash
+scripts/doctor.sh                # seluruh stack
+scripts/doctor.sh --host db-01   # detail satu server yang dipantau
+```
 
 | Gejala | Cek |
 |---|---|

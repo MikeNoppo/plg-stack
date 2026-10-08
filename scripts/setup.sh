@@ -309,6 +309,7 @@ cat <<EOF
   Grafana : https://$GRAFANA_DOMAIN  (user: $GRAFANA_ADMIN_USER)
   Tambah server yang dipantau: scripts/agent-token.sh add NAMA-SERVER
   (membuat token untuk server itu dan menampilkan perintah install agent-nya)
+  Cek semuanya setelah deploy: scripts/doctor.sh
 EOF
 if [[ " ${PROFILES[*]} " == *" backup "* ]]; then
 	echo "  Simpan BACKUP_PASSWORD dari .env di luar server ini; tanpa itu backup tidak bisa dipulihkan."
