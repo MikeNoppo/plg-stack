@@ -132,7 +132,8 @@ tetap terlihat di Grafana:
   (`LOKI_RETENTION`); setelah itu disk lokal kosong dengan sendirinya.
 - Log baru disimpan di S3 mulai pukul 00:00 UTC berikutnya, minimal satu jam
   setelah deploy, karena Loki baru bisa berganti penyimpanan di awal hari.
-  Tanggal peralihannya tercatat di `/loki/s3-since` (volume `loki-data`).
+  Tanggal peralihannya tercatat di `/loki/s3-since` (volume `loki-data`) dan
+  ditampilkan `scripts/doctor.sh`.
 - Selama masa peralihan, log lama di disk lokal tidak ikut backup.
 
 Kembali dari `s3` ke `filesystem` tidak memindahkan log yang sudah ada di S3;
@@ -462,9 +463,9 @@ dashboard, threshold panel sama dengan alert), config Loki, backup dan restore
 
 Mulai dari `scripts/doctor.sh`. Script ini memeriksa konfigurasi, DNS,
 sertifikat TLS, endpoint ingest, container, data yang ditolak Prometheus atau
-Loki, server yang berhenti melapor, token tanpa data, backup, dan disk, lalu
-menyarankan perbaikannya. Di laptop, yang dicek hanya konfigurasi dan endpoint
-publik; di server stack, semuanya.
+Loki, penyimpanan log, server yang berhenti melapor, token tanpa data, backup,
+dan disk, lalu menyarankan perbaikannya. Di laptop, yang dicek hanya
+konfigurasi dan endpoint publik; di server stack, semuanya.
 
 ```bash
 scripts/doctor.sh                # seluruh stack

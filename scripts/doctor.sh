@@ -271,6 +271,11 @@ if ((LOCAL)); then
 			ok "$service berjalan ($health)"
 		fi
 	done
+	init="$(container loki-init)"
+	if [[ -n "$init" && "$(docker inspect -f '{{.State.ExitCode}}' "$init")" != 0 ]]; then
+		fail "loki-init gagal menulis config Loki, jadi Loki tidak bisa start"
+		hint "Lihat penyebabnya: docker logs $(docker inspect -f '{{.Name}}' "$init" | tr -d /)"
+	fi
 	PROM="$(container prometheus)"
 fi
 
@@ -329,6 +334,23 @@ elif ((LOCAL)) && [[ -n "$PROM" ]]; then
 	else
 		fail "Loki belum siap"
 	fi
+	storage="$(env_value LOKI_STORAGE)"
+	storage="${storage:-filesystem}"
+	# "from store" per storage period of the config Loki runs with.
+	mapfile -t periods < <(docker exec "$PROM" wget -qO- http://loki:3100/config 2>/dev/null | tr -d '"' |
+		awk '/^schema_config:/ { on = 1; next } /^[^ ]/ { on = 0 }
+			on && $2 == "from:" { from = $3 } on && $1 == "object_store:" { print from, $2 }')
+	current="${periods[-1]:-}"
+	if [[ -n "$current" && "${current#* }" != "$storage" ]]; then
+		fail "LOKI_STORAGE=$storage, tapi Loki masih menyimpan log di ${current#* }"
+		hint "Deploy ulang (docker compose up -d, atau Deploy di Dokploy)"
+	elif ((${#periods[@]} > 1)) && [[ "${current% *}" > "$(date -u +%F)" ]]; then
+		ok "Log disimpan di disk lokal sampai ${current% *} 00:00 UTC, lalu di S3"
+	elif ((${#periods[@]} > 1)); then
+		ok "Log disimpan di S3 sejak ${current% *}; log sebelumnya dibaca dari disk lokal sampai terhapus retensi"
+	elif [[ -n "$current" ]]; then
+		ok "Log disimpan di $([[ "$storage" == s3 ]] && echo S3 || echo "disk lokal")"
+	fi
 
 	reporting="$(value "$(prom "count(group by (host) (last_over_time(up{job=\"node\"}[$silent])))")")"
 	if [[ "${reporting:-0}" == 0 ]]; then
@@ -371,6 +393,11 @@ elif ((LOCAL)) && [[ -n "$PROM" ]]; then
 		greater_than_max_sample_age) hint "Backlog lebih tua dari LOKI_MAX_LOG_AGE" ;;
 		esac
 	done <<<"$(prom 'sum by (reason) (increase(loki_discarded_samples_total{job="plg-loki"}[1h])) > 0')"
+	flushes="$(prom 'sum(increase(loki_ingester_chunks_flush_failures_total{job="plg-loki"}[1h])) > 0')"
+	if [[ -n "$flushes" ]]; then
+		fail "Loki gagal menyimpan sebagian log ke storage dalam 1 jam terakhir"
+		hint "Lihat penyebabnya: docker logs --tail 50 $(docker inspect -f '{{.Name}}' "$(container loki)" | tr -d /); untuk S3 cek LOKI_S3_* dan akses ke bucket"
+	fi
 	usage="$(prom '100 * (prometheus_tsdb_storage_blocks_bytes + prometheus_tsdb_wal_storage_size_bytes) / (prometheus_tsdb_retention_limit_bytes > 0)')"
 	usage="$(value "$usage" | cut -d. -f1)"
 	if [[ -n "$usage" ]] && ((usage >= $(threshold metrics_disk warning))); then
