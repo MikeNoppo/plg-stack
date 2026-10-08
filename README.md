@@ -105,6 +105,7 @@ Semua nilai di bawah punya default dan bisa diubah tanpa menyentuh file lain
 | Rotasi log container stack | `LOG_MAX_SIZE`, `LOG_MAX_FILE` |
 | Metrik | `PROMETHEUS_RETENTION`, `PROMETHEUS_RETENTION_SIZE`, `PROMETHEUS_OOO_WINDOW` |
 | Retensi log per jenis | `LOKI_RETENTION`, `LOKI_RETENTION_JOURNAL`, `LOKI_SHORT_RETENTION_ENVS`, `LOKI_SHORT_RETENTION` |
+| Penyimpanan log | `LOKI_STORAGE`, `LOKI_S3_*` (lihat [Penyimpanan log](#penyimpanan-log)) |
 | Limit Loki | `LOKI_INGESTION_RATE_MB`, `LOKI_PER_STREAM_RATE_MB`, `LOKI_MAX_LINE_SIZE`, `LOKI_MAX_QUERY_SERIES`, `LOKI_QUERY_TIMEOUT`, ... |
 | Grafana | `GRAFANA_PLUGINS`, `GRAFANA_DB_*` (PostgreSQL/MySQL sebagai pengganti SQLite) |
 | Self-monitoring | `COMPOSE_PROFILES=self-monitoring`, `SELF_MONITORING_*` |
@@ -114,6 +115,28 @@ Semua nilai di bawah punya default dan bisa diubah tanpa menyentuh file lain
 Loki hanya membatasi umur log, bukan ukurannya. Pertumbuhan disk dikendalikan
 lewat retensi per jenis dan limit ingest; pantau ukurannya di dashboard
 **PLG Stack Health**.
+
+### Penyimpanan log
+
+`LOKI_STORAGE` menentukan tempat Loki menyimpan log:
+
+- `filesystem` (default): volume `loki-data` di server stack; ikut backup.
+- `s3`: bucket S3 / S3-compatible (`LOKI_S3_*`); disk server tetap lega, dan
+  log di bucket tidak ikut backup karena tidak tersimpan di server.
+
+Pindah dari `filesystem` ke `s3` cukup dengan mengubah `.env` (atau menjalankan
+ulang `setup.sh`) lalu deploy ulang. Tidak ada data yang disalin, dan log lama
+tetap terlihat di Grafana:
+
+- Log yang sudah ada tetap dibaca dari disk lokal sampai terhapus retensi
+  (`LOKI_RETENTION`); setelah itu disk lokal kosong dengan sendirinya.
+- Log baru disimpan di S3 mulai pukul 00:00 UTC berikutnya, minimal satu jam
+  setelah deploy, karena Loki baru bisa berganti penyimpanan di awal hari.
+  Tanggal peralihannya tercatat di `/loki/s3-since` (volume `loki-data`).
+- Selama masa peralihan, log lama di disk lokal tidak ikut backup.
+
+Kembali dari `s3` ke `filesystem` tidak memindahkan log yang sudah ada di S3;
+log itu tidak terbaca lagi.
 
 ## 2. Pasang agent di server yang dipantau
 

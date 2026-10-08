@@ -179,6 +179,12 @@ echo "  filesystem : di volume Docker server ini (ikut dipindah lewat backup/res
 echo "  s3         : di bucket S3 / S3-compatible (tidak perlu dipindah, disk lokal aman)."
 ask STORAGE "Pilih (filesystem/s3)" "$(old LOKI_STORAGE filesystem)" '^(filesystem|s3)$'
 set_value LOKI_STORAGE "$STORAGE"
+if [[ "$STORAGE" == s3 && "$(old LOKI_STORAGE)" == filesystem ]]; then
+	note "Log yang sudah ada tetap terbaca dari disk lokal sampai terhapus retensi; log baru disimpan"
+	note "di S3 mulai pukul 00:00 UTC berikutnya (minimal satu jam setelah deploy)."
+elif [[ "$STORAGE" == filesystem && "$(old LOKI_STORAGE)" == s3 ]]; then
+	note "Log yang sudah tersimpan di S3 tidak terbaca lagi setelah kembali ke filesystem."
+fi
 if [[ "$STORAGE" == s3 ]]; then
 	ask value "Nama bucket" "$(old LOKI_S3_BUCKET)"
 	set_value LOKI_S3_BUCKET "$value"

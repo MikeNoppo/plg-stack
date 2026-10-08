@@ -81,6 +81,7 @@ services:
     volumes:
       - ./loki:/src:ro
       - loki-config:/config
+      - loki-data:/loki
 
   # The Loki image is distroless (no shell or wget), so it has no
   # healthcheck; the watchdog checks /ready instead.
