@@ -157,6 +157,47 @@ assert_contains "$(cat "$WORK/wget.log")" "https://fail.example" "the failure UR
 restic() { [[ "$1" == cat ]] && return 11; return 0; }
 (run_backup) 2>"$WORK/stderr"
 assert_contains "$(cat "$WORK/stderr")" "masih dikunci" "a locked repository is explained"
+
+# A repository that does not exist until restic init creates it.
+restic() {
+	printf '%s | from %s\n' "$*" "${RESTIC_FROM_REPOSITORY:-}" >>"$WORK/restic.log"
+	case "$1" in
+	cat) [[ -f "$WORK/created" ]] || return 10 ;;
+	init)
+		[[ "$*" == *--copy-chunker-params* && -n "${UNREADABLE_SOURCE:-}" ]] && return 12
+		touch "$WORK/created"
+		;;
+	backup)
+		while [[ "$1" != -- ]]; do shift; done
+		shift
+		"$@" >/dev/null
+		echo '{"message_type":"summary","total_bytes_processed":1,"data_added":1}'
+		;;
+	snapshots) echo '[]' ;;
+	esac
+}
+LOCAL="$WORK/local-repository"
+mkdir -p "$LOCAL" && echo '{}' >"$LOCAL/config"
+TARGETS="caddy"
+export RESTIC_REPOSITORY=s3:https://s3.example.com/bucket/plg-stack
+rm -f "$WORK/created" && : >"$WORK/restic.log"
+(list_runs) >/dev/null 2>"$WORK/stderr"
+assert_eq 1 "$?" "listing a missing repository fails"
+assert_fails "and does not create it" grep -q "^init" "$WORK/restic.log"
+assert_contains "$(cat "$WORK/stderr")" "belum ada backup di s3:https://s3.example.com/bucket/plg-stack" "the missing repository is named"
+(run_backup) 2>/dev/null
+assert_eq 0 "$?" "a backup creates a missing repository"
+assert_contains "$(cat "$WORK/restic.log")" "init --copy-chunker-params | from $LOCAL" \
+	"it takes /local's chunker parameters, so copying /local in later stores shared data once"
+rm -f "$WORK/created" && : >"$WORK/restic.log"
+(UNREADABLE_SOURCE=1 run_backup) 2>"$WORK/stderr"
+assert_eq 0 "$?" "an unreadable /local does not stop the backup"
+assert_ok "the repository is then created without its parameters" grep -qxF "init | from " "$WORK/restic.log"
+assert_contains "$(cat "$WORK/stderr")" "parameter chunk $LOCAL tidak bisa dibaca" "and that is pointed out"
+export RESTIC_REPOSITORY=/local
+LOCAL=/local
+TARGETS="grafana prometheus caddy"
+
 restic() {
 	printf '%s\n' "$*" >>"$WORK/restic.log"
 	case "$1" in

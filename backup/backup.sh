@@ -12,6 +12,7 @@ set -eu
 set -o pipefail
 
 VOLUMES=/volumes
+LOCAL=/local
 STAGE=.plg-backup
 TMP=/tmp/plg-backup
 METRICS=/textfile/plg_backup.prom
@@ -30,7 +31,7 @@ idle() {
 	while :; do sleep 3600; done
 }
 
-repository() { printf '%s' "${RESTIC_REPOSITORY:-}" | sed 's#//[^/@]*@#//***@#'; }
+repository() { printf '%s' "${1:-${RESTIC_REPOSITORY:-}}" | sed 's#//[^/@]*@#//***@#'; }
 
 # Waits for another restic process (a manual check, a long prune) instead of
 # failing at once.
@@ -39,6 +40,24 @@ restic() { command restic --retry-lock 5m "$@"; }
 require_config() {
 	[ -n "${RESTIC_REPOSITORY:-}" ] && [ -n "${RESTIC_PASSWORD:-}" ] ||
 		die "BACKUP_REPOSITORY dan BACKUP_PASSWORD harus diisi"
+}
+
+# A new repository takes the chunker parameters of the one its backups come
+# from (the copy source, or /local after BACKUP_REPOSITORY moved away from it),
+# so the data both hold is stored once.
+create_repository() {
+	from="${RESTIC_FROM_REPOSITORY:-}"
+	if [ -z "$from" ] && [ "$RESTIC_REPOSITORY" != "$LOCAL" ] && [ -f "$LOCAL/config" ]; then
+		from="$LOCAL"
+	fi
+	if [ -n "$from" ] && (
+		export RESTIC_FROM_REPOSITORY="$from" RESTIC_FROM_PASSWORD="${RESTIC_FROM_PASSWORD:-$RESTIC_PASSWORD}"
+		restic init --copy-chunker-params >/dev/null 2>"$TMP/error"
+	); then
+		return 0
+	fi
+	[ -z "$from" ] || log "parameter chunk $(repository "$from") tidak bisa dibaca, jadi tidak dipakai"
+	restic init >/dev/null
 }
 
 open_repository() {
@@ -50,8 +69,12 @@ open_repository() {
 	case "$code" in
 	0) ;;
 	10)
+		if [ "${1:-}" != create ]; then
+			log "belum ada backup di $(repository)"
+			return 1
+		fi
 		log "repository belum ada, membuat baru di $(repository)"
-		restic init "$@" >/dev/null
+		create_repository
 		;;
 	11)
 		log "repository $(repository) masih dikunci proses restic lain; lock dari proses yang mati dilepas otomatis"
@@ -212,7 +235,7 @@ run_backup() {
 	: >"$TMP/sizes"
 	trap cleanup EXIT
 	cleanup
-	if ! open_repository; then
+	if ! open_repository create; then
 		finish_run " repository"
 		return 1
 	fi
@@ -374,9 +397,7 @@ copy_runs() {
 		cat "$TMP/error" >&2
 		die "repository asal $from tidak bisa dibuka; bila password-nya bukan BACKUP_PASSWORD, isi RESTIC_FROM_PASSWORD"
 	fi
-	# A new repository takes the source's chunker parameters, so the copied
-	# runs and later backups share the data they have in common.
-	open_repository --copy-chunker-params || exit 1
+	open_repository create || exit 1
 	[ "$(restic cat config | jq -r .chunker_polynomial)" = "$(printf '%s' "$source_config" | jq -r .chunker_polynomial)" ] ||
 		log "$(repository) sudah dipakai sebelum copy, jadi data yang sama di backup lama dan baru tersimpan dua kali sampai backup lama terhapus retensi"
 	restic copy --tag plg-stack
