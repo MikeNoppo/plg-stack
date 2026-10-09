@@ -384,8 +384,7 @@ restore() {
 	log "$restored komponen dipulihkan dari $run"
 }
 
-# Copies the runs of another repository, e.g. /local after BACKUP_REPOSITORY
-# moved to S3. Runs copied before are skipped, so it can be run again.
+# Runs copied before are skipped, so a copy can be run again.
 copy_runs() {
 	require_config
 	from="${1:-}"
@@ -393,19 +392,29 @@ copy_runs() {
 	[ "$from" != "$RESTIC_REPOSITORY" ] || die "repository asal sama dengan BACKUP_REPOSITORY"
 	export RESTIC_FROM_REPOSITORY="$from" RESTIC_FROM_PASSWORD="${RESTIC_FROM_PASSWORD:-$RESTIC_PASSWORD}"
 	take_lock
-	if ! source_config="$(
+	source="$(repository "$from")"
+	code=0
+	# --json keeps restic's notice about waiting for a lock out of the config.
+	source_config="$(
 		export RESTIC_REPOSITORY="$from" RESTIC_PASSWORD="$RESTIC_FROM_PASSWORD"
 		restic unlock >/dev/null 2>&1 || true
-		restic cat config 2>"$TMP/error"
-	)"; then
+		restic --json cat config 2>"$TMP/error"
+	)" || code=$?
+	case "$code" in
+	0) ;;
+	10) die "repository asal $source tidak ditemukan" ;;
+	11) die "repository asal $source masih dikunci proses restic lain" ;;
+	12) die "password repository asal $source tidak cocok; isi RESTIC_FROM_PASSWORD bila berbeda dari BACKUP_PASSWORD" ;;
+	*)
 		cat "$TMP/error" >&2
-		die "repository asal $from tidak bisa dibuka; bila password-nya bukan BACKUP_PASSWORD, isi RESTIC_FROM_PASSWORD"
-	fi
+		die "repository asal $source tidak bisa dibuka (kode $code)"
+		;;
+	esac
 	open_repository create || exit 1
-	[ "$(restic cat config | jq -r .chunker_polynomial)" = "$(printf '%s' "$source_config" | jq -r .chunker_polynomial)" ] ||
+	[ "$(restic --json cat config | jq -r .chunker_polynomial)" = "$(printf '%s' "$source_config" | jq -r .chunker_polynomial)" ] ||
 		log "$(repository) sudah dipakai sebelum copy, jadi data yang sama di backup lama dan baru tersimpan dua kali sampai backup lama terhapus retensi"
 	restic copy --tag plg-stack
-	log "semua backup dari $from sudah ada di $(repository)"
+	log "semua backup dari $source sudah ada di $(repository)"
 }
 
 [ -z "${PLG_BACKUP_SOURCE_ONLY:-}" ] || return 0

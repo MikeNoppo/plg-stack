@@ -292,12 +292,16 @@ assert_eq 0 "$(cat "$WORK/restore-status")" "a replaced history does not stop th
 
 # --- copy -----------------------------------------------------------------------
 
-# The source is /local; the destination exists once dest-config does.
+# The sources are /local and a rest server; the destination exists once
+# dest-config does.
 restic() {
 	printf '%s | from %s:%s\n' "$*" "${RESTIC_FROM_REPOSITORY:-}" "${RESTIC_FROM_PASSWORD:-}" >>"$WORK/restic.log"
+	[[ "$1" != --json ]] || shift
 	case "$1" in
 	cat)
-		if [[ "$RESTIC_REPOSITORY" == /local ]]; then
+		if [[ "$RESTIC_REPOSITORY" == /locall ]]; then
+			return 10
+		elif [[ "$RESTIC_REPOSITORY" == /local || "$RESTIC_REPOSITORY" == rest:* ]]; then
 			[[ "$RESTIC_PASSWORD" == secret ]] || return 12
 			echo '{"chunker_polynomial":"abc"}'
 		else
@@ -315,6 +319,8 @@ log="$(cat "$WORK/restic.log")"
 assert_contains "$log" "init --copy-chunker-params | from /local:secret" "a new repository takes the source's chunker parameters"
 assert_contains "$log" "copy --tag plg-stack | from /local:secret" "every run is copied, with BACKUP_PASSWORD for the source by default"
 assert_fails "matching chunker parameters need no warning" grep -q "dua kali" "$WORK/stderr"
+assert_eq 2 "$(grep -c -- "--json cat config" "$WORK/restic.log")" \
+	"both configs that get compared are read with --json, so a lock-wait notice cannot end up in them"
 
 echo '{"chunker_polynomial":"def"}' >"$WORK/dest-config"
 : >"$WORK/restic.log"
@@ -324,7 +330,13 @@ assert_fails "an existing repository is not created again" grep -q "^init" "$WOR
 
 (RESTIC_FROM_PASSWORD=other copy_runs /local) >/dev/null 2>"$WORK/stderr"
 assert_eq 1 "$?" "a source that cannot be opened fails"
-assert_contains "$(cat "$WORK/stderr")" "isi RESTIC_FROM_PASSWORD" "a different source password is explained"
+assert_contains "$(cat "$WORK/stderr")" "password repository asal /local tidak cocok; isi RESTIC_FROM_PASSWORD" \
+	"a different source password is explained"
+(copy_runs /locall) >/dev/null 2>"$WORK/stderr"
+assert_contains "$(cat "$WORK/stderr")" "repository asal /locall tidak ditemukan" "a mistyped source is not blamed on the password"
+(copy_runs rest:https://olduser:oldpass@backup.example.com/plg) >/dev/null 2>"$WORK/stderr"
+assert_contains "$(cat "$WORK/stderr")" "dari rest:https://***@backup.example.com/plg" "the source is named"
+assert_fails "without its password" grep -q oldpass "$WORK/stderr"
 (copy_runs) 2>/dev/null
 assert_eq 1 "$?" "the source is required"
 (copy_runs "$RESTIC_REPOSITORY") 2>/dev/null
