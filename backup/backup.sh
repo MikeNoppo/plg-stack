@@ -16,6 +16,7 @@ STAGE=.plg-backup
 TMP=/tmp/plg-backup
 METRICS=/textfile/plg_backup.prom
 ALL_TARGETS="grafana prometheus loki caddy"
+LOKI_HISTORY=storage-history
 HOST="${BACKUP_HOST:-plg-stack}"
 TARGETS="$(printf '%s' "${BACKUP_TARGETS:-grafana,prometheus,loki,caddy}" | tr ',' ' ')"
 
@@ -128,15 +129,7 @@ link_loki() {
 
 stage_prometheus() { stage_links prometheus; }
 
-# Logs on S3 are not backed up. Restoring local ones would also replace
-# /loki/storage-history with an older one, hiding what Loki stored on S3 since.
-loki_on_s3() { [ "${LOKI_STORAGE:-filesystem}" = s3 ]; }
-
 stage_loki() {
-	if loki_on_s3; then
-		log "Loki menyimpan log di S3, jadi datanya tidak ikut dibackup"
-		return 2
-	fi
 	# Writes the chunks Loki still holds in memory; anything newer is in the WAL.
 	wget -q -T 60 -O /dev/null --post-data '' http://loki:3100/flush 2>/dev/null ||
 		log "Loki tidak bisa diminta flush; log terbaru diambil dari WAL"
@@ -326,6 +319,18 @@ list_runs() {
 		done
 }
 
+# Loki reads each day from the store its storage history names (loki/init.sh),
+# and the bucket keeps what Loki stored after the backup. So a restored
+# history that is an earlier version of the current one gives way to it; one
+# from another deployment (e.g. the old server) is kept.
+keep_loki_history() {
+	if [ ! -f "$2" ] || [ "$(head -n "$(wc -l <"$2")" "$1")" = "$(cat "$2")" ]; then
+		cp "$1" "$2"
+	else
+		log "riwayat penyimpanan Loki dari backup dipakai, karena bukan versi lama dari riwayat sekarang"
+	fi
+}
+
 restore() {
 	require_config
 	open_repository || exit 1
@@ -335,18 +340,17 @@ restore() {
 	restored=0
 	for target in $ALL_TARGETS; do
 		[ -d "$VOLUMES/$target" ] || continue
-		if [ "$target" = loki ] && loki_on_s3; then
-			log "Loki menyimpan log di S3, jadi volume Loki tidak dipulihkan"
-			continue
-		fi
 		count="$(restic snapshots --host "$HOST" --tag "$filter,$target" --json | jq length)"
 		if [ "$count" = 0 ]; then
 			log "tidak ada backup $target untuk $run, dilewati"
 			continue
 		fi
 		log "memulihkan $target"
+		rm -f "$TMP/loki-history"
+		[ "$target" != loki ] || [ ! -f "$VOLUMES/loki/$LOKI_HISTORY" ] || cp "$VOLUMES/loki/$LOKI_HISTORY" "$TMP/loki-history"
 		find "$VOLUMES/$target" -mindepth 1 -delete
 		restic dump --host "$HOST" --tag "$filter,$target" latest "/$target.tar" | tar -x -C "$VOLUMES/$target"
+		[ ! -f "$TMP/loki-history" ] || keep_loki_history "$TMP/loki-history" "$VOLUMES/loki/$LOKI_HISTORY"
 		restored=$((restored + 1))
 	done
 	[ "$restored" -gt 0 ] || die "tidak ada backup yang cocok dengan '$run' (host $HOST)"

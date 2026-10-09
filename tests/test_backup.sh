@@ -59,10 +59,7 @@ assert_ok "a block written while the WAL is linked is staged too" test -f "$dir/
 loki="$VOLUMES/loki"
 mkdir -p "$loki/chunks/fake" "$loki/wal" "$loki/tsdb-index" "$loki/tsdb-cache"
 echo chunk >"$loki/chunks/fake/1"
-LOKI_STORAGE=s3
-stage_loki >/dev/null 2>&1
-assert_eq 2 "$?" "Loki on S3 is skipped"
-LOKI_STORAGE=filesystem
+echo "2024-01-01 filesystem" >"$loki/storage-history"
 : >"$WORK/wget.log"
 # A flush that finishes while the index is linked stores a new chunk.
 cp() {
@@ -73,6 +70,7 @@ cp() {
 dir="$(stage_loki 2>/dev/null)"
 unset -f cp
 assert_ok "Loki chunks are staged" test -f "$dir/chunks/fake/1"
+assert_ok "Loki's storage history is staged" test -f "$dir/storage-history"
 assert_ok "a chunk stored while the index is linked is staged too" test -f "$dir/chunks/fake/2"
 assert_fails "Loki caches are skipped" test -e "$dir/tsdb-cache"
 assert_contains "$(cat "$WORK/wget.log")" "http://loki:3100/flush" "Loki is asked to flush first"
@@ -208,21 +206,39 @@ restic() { echo '[]'; }
 (restore 19990101-000000) 2>/dev/null
 assert_eq 1 "$?" "an unknown run fails"
 
-printf "2024-01-01 filesystem\n2026-10-09 s3\n" >"$loki/storage-history"
+# Restores of Loki, whose volume carries the storage history of loki/init.sh.
 restic() {
-	printf '%s\n' "$*" >>"$WORK/restic.log"
 	case "$1" in
 	snapshots) echo '[{}]' ;;
-	dump) cat "$WORK/grafana-dump.tar" ;;
+	dump) cat "$WORK/loki-dump.tar" ;;
 	esac
 }
-: >"$WORK/restic.log"
-LOKI_STORAGE=s3
-(restore 20261008-020000) 2>"$WORK/stderr"
-LOKI_STORAGE=filesystem
-assert_eq "2024-01-01 filesystem 2026-10-09 s3" "$(echo $(cat "$loki/storage-history"))" "Loki's volume is left alone while Loki uses S3"
-assert_fails "local logs are not restored over it" grep -q ",loki latest" "$WORK/restic.log"
-assert_contains "$(cat "$WORK/stderr")" "volume Loki tidak dipulihkan" "the skipped volume is explained"
+loki_backup() {
+	rm -rf "$WORK/loki-archive" && mkdir -p "$WORK/loki-archive/chunks"
+	echo restored >"$WORK/loki-archive/chunks/old"
+	[[ -z "$1" ]] || printf '%s\n' "$@" >"$WORK/loki-archive/storage-history"
+	tar -C "$WORK/loki-archive" -cf "$WORK/loki-dump.tar" .
+}
+restore_loki() {
+	printf '%s\n' "$@" >"$loki/storage-history"
+	rm -rf "$VOLUMES/caddy" && mkdir "$VOLUMES/caddy"
+	(set -e; restore 20261008-020000) 2>"$WORK/stderr"
+	echo "$?" >"$WORK/restore-status"
+	paste -sd, - <"$loki/storage-history"
+}
+loki_backup "2024-01-01 filesystem"
+assert_eq "2024-01-01 filesystem,2026-10-09 s3" "$(restore_loki "2024-01-01 filesystem" "2026-10-09 s3")" \
+	"an older history gives way to the current one, which also names the stores of newer logs"
+assert_eq restored "$(cat "$loki/chunks/old")" "Loki's volume is restored while Loki uses S3"
+assert_eq 0 "$(cat "$WORK/restore-status")" "the restore goes on after Loki"
+assert_ok "and restores the volumes after it" test -f "$VOLUMES/caddy/chunks/old"
+loki_backup ""
+assert_eq "2024-01-01 s3" "$(restore_loki "2024-01-01 s3")" "a backup without a history keeps the current one"
+loki_backup "2024-01-01 filesystem" "2026-10-01 s3"
+assert_eq "2024-01-01 filesystem,2026-10-01 s3" "$(restore_loki "2024-01-01 s3")" \
+	"the history of another deployment (a moved stack) comes with its logs"
+assert_contains "$(cat "$WORK/stderr")" "riwayat penyimpanan Loki dari backup dipakai" "the replaced history is pointed out"
+assert_eq 0 "$(cat "$WORK/restore-status")" "a replaced history does not stop the restore"
 
 # --- copy -----------------------------------------------------------------------
 

@@ -131,6 +131,9 @@ semua log tetap terlihat di Grafana:
 - Loki membaca log setiap hari dari tempat yang dipakai pada hari itu. Setiap
   pergantian dicatat di `/loki/storage-history` (volume `loki-data`) dan
   catatan itu hanya pernah ditambah.
+- Riwayat itu ikut backup bersama volume `loki-data`. Saat restore, riwayat
+  yang sekarang tetap dipakai bila riwayat di backup hanya versi lamanya,
+  sehingga log yang sudah tersimpan di S3 tetap terbaca.
 - Tempat baru dipakai mulai pukul 00:00 UTC berikutnya, minimal satu jam
   setelah deploy, karena Loki hanya bisa berganti penyimpanan di awal hari.
   Mengganti balik sebelum waktu itu membatalkan pergantiannya.
@@ -138,7 +141,6 @@ semua log tetap terlihat di Grafana:
   Selama masih ada log di S3, `LOKI_S3_*` harus tetap terisi.
 - `scripts/doctor.sh` menampilkan tempat penyimpanan sekarang dan pergantian
   yang dijadwalkan.
-- Selama masa peralihan ke S3, log lama di disk lokal tidak ikut backup.
 
 ## 2. Pasang agent di server yang dipantau
 
@@ -375,9 +377,9 @@ backup setiap hari pada jam `BACKUP_SCHEDULE` (zona waktu `TZ`):
   atau `/local` (folder `BACKUP_LOCAL_DIR` di server ini).
 - **Retensi**: `BACKUP_KEEP_DAILY`, `BACKUP_KEEP_WEEKLY`, `BACKUP_KEEP_MONTHLY`;
   backup yang lebih lama dihapus otomatis.
-- **Isi**: metrik, log (bila `LOKI_STORAGE=filesystem`; log di S3 tidak ikut
-  backup maupun restore), database Grafana (bila SQLite), dan sertifikat TLS.
-  Bisa dipilih lewat `BACKUP_TARGETS`.
+- **Isi**: metrik, log yang tersimpan di server (volume `loki-data`; log di
+  bucket S3 tidak), database Grafana (bila SQLite), dan sertifikat TLS. Bisa
+  dipilih lewat `BACKUP_TARGETS`.
 
 Status backup terakhir tampil di **PLG Stack Health**. Arahkan
 `BACKUP_PING_URL` dan `BACKUP_FAIL_URL` ke layanan seperti healthchecks.io
