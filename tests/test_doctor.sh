@@ -70,10 +70,36 @@ write_env "COMPOSE_PROFILES=''"
 assert_contains "$(doctor)" "Backup terjadwal belum aktif" "disabled backups are pointed out"
 assert_contains "$(doctor --host db-01)" "hanya bisa dicek di server stack" "--host needs the stack's server"
 
+# Dokploy writes every value double-quoted.
+sed -e "s/='\(.*\)'$/=\"\1\"/" -e "s/^GATEWAY_SCHEME=.*/GATEWAY_SCHEME=\"http\"/" -e "/^COMPOSE_FILE=/d" \
+	"$WORK/checkout/.env" >"$WORK/dokploy.env" && mv "$WORK/dokploy.env" "$WORK/checkout/.env"
+out="$(doctor)"
+assert_contains "$out" "(mode dokploy)" "double-quoted values are read like Compose reads them"
+assert_contains "$out" "Token 'db-01' diterima gateway" "double-quoted tokens are read"
+
 rm "$WORK/checkout/.env"
 assert_fails "a missing .env fails" doctor >/dev/null
 
-source <(sed -n '/^threshold()/p; /^config_value()/p; /^seconds()/,/^}/p' "$ROOT/scripts/doctor.sh")
+source <(sed -n '/^threshold()/p; /^config_value()/p; /^seconds()/,/^}/p; /^env_value()/,/^}/p;
+	/^newest_storage_period()/,/^}/p' "$ROOT/scripts/doctor.sh")
+cd "$WORK" || exit 1
+printf '%s\n' "A='single # kept'" 'B="double"' "C=plain # comment" "D=plain" >.env
+assert_eq "single # kept|double|plain|plain" "$(env_value A)|$(env_value B)|$(env_value C)|$(env_value D)" \
+	".env values are read the way Compose reads them"
+
+config() {
+	printf 'schema_config:\n  configs:\n'
+	while (($#)); do
+		printf '  - from: "%s"\n    store: tsdb\n    object_store: %s\n    schema: v13\n' "$1" "$2"
+		shift 2
+	done
+	printf 'storage_config:\n  aws:\n    s3: ""\n'
+}
+assert_eq "1 2024-01-01 filesystem " "$(config 2024-01-01 filesystem | newest_storage_period)" "a single store is read from Loki's config"
+assert_eq "2 2026-10-09 s3 filesystem" "$(config 2024-01-01 filesystem 2026-10-09 s3 | newest_storage_period)" \
+	"the newest period and the store before it are read"
+assert_eq "" "$(printf '' | newest_storage_period)" "an unreachable Loki gives nothing"
+
 cd "$ROOT" || exit 1
 assert_eq 85 "$(threshold disk warning)" "thresholds come from the generator config"
 assert_eq 2m "$(threshold agent_lag warning)" "duration thresholds keep their unit"

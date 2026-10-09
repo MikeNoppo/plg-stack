@@ -48,7 +48,18 @@ while (($#)); do
 	shift
 done
 
-env_value() { sed -n "s/^$1=//p" .env | tail -1 | sed "s/^'\\(.*\\)'\$/\\1/"; }
+# setup.sh writes KEY='value' and Dokploy KEY="value"; Compose also drops a
+# ' # comment' after an unquoted value.
+env_value() {
+	local value
+	value="$(sed -n "s/^$1=//p" .env | tail -1)"
+	case "$value" in
+	\'*) value="${value#\'}" && value="${value%%\'*}" ;;
+	\"*) value="${value#\"}" && value="${value%%\"*}" ;;
+	*) value="${value%%[[:space:]]#*}" ;;
+	esac
+	printf '%s' "$value"
+}
 config_value() { sed -n "s/^$1 = \"\\(.*\\)\"/\\1/p" grafana/generator/config.toml | head -1; }
 # A level of an inline threshold table in config.toml, e.g. threshold disk warning.
 threshold() { sed -n "s/^$1 = {.*$2 = \"\\{0,1\\}\\([^\",} ]*\\).*/\\1/p" grafana/generator/config.toml | head -1; }
@@ -63,6 +74,13 @@ ago() {
 	if ((s < 120)); then echo "$s detik"; elif ((s < 7200)); then echo "$((s / 60)) menit"; elif ((s < 172800)); then echo "$((s / 3600)) jam"; else echo "$((s / 86400)) hari"; fi
 }
 has() { command -v "$1" >/dev/null 2>&1; }
+newest_storage_period() {
+	tr -d '"' | awk '/^schema_config:/ { on = 1; next } /^[^ ]/ { on = 0 }
+		on && $2 == "from:" { from = $3 }
+		on && $1 == "object_store:" { n++; previous = store; since = from; store = $2 }
+		END { if (n) print n, since, store, previous }'
+}
+store_name() { if [[ "$1" == s3 ]]; then echo S3; else echo "disk lokal"; fi; }
 
 # --- configuration ------------------------------------------------------------------
 
@@ -336,20 +354,19 @@ elif ((LOCAL)) && [[ -n "$PROM" ]]; then
 	fi
 	storage="$(env_value LOKI_STORAGE)"
 	storage="${storage:-filesystem}"
-	# "from store" per storage period of the config Loki runs with.
-	mapfile -t periods < <(docker exec "$PROM" wget -qO- http://loki:3100/config 2>/dev/null | tr -d '"' |
-		awk '/^schema_config:/ { on = 1; next } /^[^ ]/ { on = 0 }
-			on && $2 == "from:" { from = $3 } on && $1 == "object_store:" { print from, $2 }')
-	current="${periods[-1]:-}"
-	if [[ -n "$current" && "${current#* }" != "$storage" ]]; then
-		fail "LOKI_STORAGE=$storage, tapi Loki masih menyimpan log di ${current#* }"
+	read -r periods since store previous < <(docker exec "$PROM" wget -qO- http://loki:3100/config 2>/dev/null |
+		newest_storage_period)
+	if [[ -z "$store" ]]; then
+		:
+	elif [[ "$store" != "$storage" ]]; then
+		fail "LOKI_STORAGE=$storage, tapi Loki masih menyimpan log di $store"
 		hint "Deploy ulang (docker compose up -d, atau Deploy di Dokploy)"
-	elif ((${#periods[@]} > 1)) && [[ "${current% *}" > "$(date -u +%F)" ]]; then
-		ok "Log disimpan di disk lokal sampai ${current% *} 00:00 UTC, lalu di S3"
-	elif ((${#periods[@]} > 1)); then
-		ok "Log disimpan di S3 sejak ${current% *}; log sebelumnya dibaca dari disk lokal sampai terhapus retensi"
-	elif [[ -n "$current" ]]; then
-		ok "Log disimpan di $([[ "$storage" == s3 ]] && echo S3 || echo "disk lokal")"
+	elif ((periods > 1)) && [[ "$since" > "$(date -u +%F)" ]]; then
+		ok "Log disimpan di $(store_name "$previous") sampai $since 00:00 UTC, lalu di $(store_name "$store")"
+	elif ((periods > 1)); then
+		ok "Log disimpan di $(store_name "$store") sejak $since; log sebelumnya tetap dibaca dari tempat lamanya sampai terhapus retensi"
+	else
+		ok "Log disimpan di $(store_name "$store")"
 	fi
 
 	reporting="$(value "$(prom "count(group by (host) (last_over_time(up{job=\"node\"}[$silent])))")")"
