@@ -76,6 +76,7 @@ services:
     mem_limit: 32m
     environment:
       LOKI_STORAGE: ${LOKI_STORAGE:-filesystem}
+      LOKI_S3_BUCKET: ${LOKI_S3_BUCKET:-}
     command: ["/bin/sh", "/src/init.sh"]
     volumes:
       - ./loki:/src:ro
@@ -94,6 +95,8 @@ services:
       - -config.file=/config/loki.yaml
       - -config.expand-env=true
     environment:
+      # Not read by Loki: a change recreates Loki, which then loads the config
+      # loki-init wrote for it.
       LOKI_STORAGE: ${LOKI_STORAGE:-filesystem}
       LOKI_RETENTION: ${LOKI_RETENTION:-14d}
       LOKI_RETENTION_JOURNAL: ${LOKI_RETENTION_JOURNAL:-${LOKI_RETENTION:-14d}}

@@ -9,6 +9,7 @@ PLG_LOKI_INIT_SOURCE_ONLY=1 source "$ROOT/loki/init.sh"
 set +eu
 TEMPLATE="$ROOT/loki/loki.yaml.tmpl"
 OUT="$WORK/loki.yaml"
+export LOKI_S3_BUCKET=logs
 
 # Every run happens at 2026-10-08 10:00 UTC.
 NOW="$(date -u -d '2026-10-08 10:00' +%s)"
@@ -38,12 +39,16 @@ storage filesystem
 assert_eq 0 "$?" "the config is written"
 assert_eq "2024-01-01 filesystem" "$(periods)" "filesystem keeps every log on the local disk"
 assert_eq "2024-01-01 filesystem" "$(history)" "the store is recorded"
-assert_contains "$(cat "$OUT")" "delete_request_store: \${LOKI_STORAGE}" "the rest of the template is kept for Loki to expand"
+assert_contains "$(cat "$OUT")" "retention_period: \${LOKI_RETENTION:-14d}" "the rest of the template is kept for Loki to expand"
+assert_contains "$(cat "$OUT")" "delete_request_store: filesystem" "delete requests go to the current store"
+assert_fails "S3 settings are left out while no period uses S3" grep -q LOKI_S3 "$OUT"
 
 volume fresh-s3
 storage s3
 assert_eq "2024-01-01 s3" "$(periods)" "s3 keeps every log in the bucket"
 assert_eq "2024-01-01 s3" "$(history)" "an s3 start is recorded too, so the bucket's logs keep a period"
+assert_contains "$(cat "$OUT")" "secret_access_key: '\${LOKI_S3_SECRET_ACCESS_KEY}'" "S3 settings are added, quoted"
+assert_contains "$(cat "$OUT")" "delete_request_store: s3" "delete requests follow the store"
 
 DATA="$WORK/unpopulated"
 mkdir -p "$DATA"
@@ -69,6 +74,10 @@ echo "2024-01-01 filesystem
 storage filesystem
 assert_eq "2024-01-01 filesystem,2026-10-01 s3,2026-10-09 filesystem" "$(periods)" \
 	"going back to filesystem keeps the logs already stored in S3 readable"
+assert_contains "$(cat "$OUT")" "bucketnames: '\${LOKI_S3_BUCKET}'" "and the S3 settings needed to read them"
+LOKI_S3_BUCKET="" storage filesystem
+assert_eq 1 "$?" "a history with S3 periods needs the bucket"
+assert_contains "$(cat "$WORK/stderr")" "tersimpan di S3 sejak 2026-10-01, tetapi LOKI_S3_BUCKET kosong" "the missing bucket is explained"
 storage s3
 assert_eq "2024-01-01 filesystem,2026-10-01 s3" "$(history)" "and returning to s3 before the switch cancels it again"
 

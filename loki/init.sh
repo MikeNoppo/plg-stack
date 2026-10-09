@@ -1,6 +1,5 @@
 #!/bin/sh
-# Writes Loki's config before Loki starts, since the Loki image has no shell:
-# loki.yaml.tmpl plus a schema period for every store Loki has used.
+# Writes Loki's config before Loki starts, since the Loki image has no shell.
 #
 # Loki reads each day's logs from the store in use that day, so every switch
 # of LOKI_STORAGE is recorded in /loki/storage-history, which is only ever
@@ -26,6 +25,22 @@ period() {
 EOF
 }
 
+# Single quotes keep any secret a plain string (setup.sh rejects values
+# with a single quote); Loki fills in the variables when it starts.
+s3_storage() {
+	cat <<'EOF'
+storage_config:
+  aws:
+    bucketnames: '${LOKI_S3_BUCKET}'
+    region: '${LOKI_S3_REGION}'
+    # Empty endpoint and keys fall back to AWS defaults (instance role).
+    endpoint: '${LOKI_S3_ENDPOINT}'
+    access_key_id: '${LOKI_S3_ACCESS_KEY_ID}'
+    secret_access_key: '${LOKI_S3_SECRET_ACCESS_KEY}'
+    s3forcepathstyle: ${LOKI_S3_FORCE_PATH_STYLE:-false}
+EOF
+}
+
 # The first midnight (UTC) at least an hour after the epoch seconds given. A
 # period has to start after Loki loaded it, or Loki would look for logs it
 # already stored that day in the new store; the hour leaves time to deploy.
@@ -34,7 +49,6 @@ switch_date() { date -u -d "@$(($1 + 90000))" +%Y-%m-%d; }
 # Only the filesystem store writes here.
 has_local_logs() { [ -n "$(find "$DATA/chunks" -type f 2>/dev/null | head -n 1)" ]; }
 
-# Applies LOKI_STORAGE to the history in file $1.
 switch_storage() {
 	# shellcheck disable=SC2046
 	set -- "$1" $(tail -n 1 "$1")
@@ -71,6 +85,10 @@ render() {
 		echo "2024-01-01 $LOKI_STORAGE" >"$plan"
 	fi
 	switch_storage "$plan"
+	if grep -q ' s3$' "$plan" && [ -z "${LOKI_S3_BUCKET:-}" ]; then
+		log "log tersimpan di S3 sejak $(grep -m1 ' s3$' "$plan" | cut -d' ' -f1), tetapi LOKI_S3_BUCKET kosong; isi LOKI_S3_*"
+		return 1
+	fi
 	# Writing into a volume Loki has not populated yet would stop Docker from
 	# copying the image's /loki, and its owner, into it.
 	if [ -n "$(ls -A "$DATA")" ]; then
@@ -78,8 +96,9 @@ render() {
 		mv "$history.tmp" "$history"
 	fi
 	{
-		cat "$TEMPLATE"
+		sed "s/__DELETE_REQUEST_STORE__/$LOKI_STORAGE/" "$TEMPLATE"
 		while read -r from store; do period "$from" "$store"; done <"$plan"
+		if grep -q ' s3$' "$plan"; then s3_storage; fi
 	} >"$OUT.tmp"
 	mv "$OUT.tmp" "$OUT"
 	rm "$plan"
