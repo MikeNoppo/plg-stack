@@ -129,7 +129,7 @@ link_loki() {
 stage_prometheus() { stage_links prometheus; }
 
 # Logs on S3 are not backed up. Restoring local ones would also replace
-# /loki/s3-since, and Loki would then look for its S3 logs on the disk.
+# /loki/storage-history with an older one, hiding what Loki stored on S3 since.
 loki_on_s3() { [ "${LOKI_STORAGE:-filesystem}" = s3 ]; }
 
 stage_loki() {

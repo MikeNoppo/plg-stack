@@ -1,10 +1,11 @@
 #!/bin/sh
 # Writes Loki's config before Loki starts, since the Loki image has no shell:
-# loki.yaml.tmpl plus the storage periods for LOKI_STORAGE (filesystem or s3).
+# loki.yaml.tmpl plus a schema period for every store Loki has used.
 #
-# Moving from filesystem to s3 keeps the logs already on the local disk
-# readable: their days stay a filesystem period, which retention empties as
-# usual, and S3 takes over from the day kept in /loki/s3-since.
+# Loki reads each day's logs from the store in use that day, so every switch
+# of LOKI_STORAGE is recorded in /loki/storage-history, which is only ever
+# appended to. A new store takes over at a midnight (UTC); switching back
+# before then cancels the switch.
 set -eu
 
 TEMPLATE=/src/loki.yaml.tmpl
@@ -30,44 +31,58 @@ EOF
 # already stored that day in the new store; the hour leaves time to deploy.
 switch_date() { date -u -d "@$(($1 + 90000))" +%Y-%m-%d; }
 
+# Only the filesystem store writes here.
 has_local_logs() { [ -n "$(find "$DATA/chunks" -type f 2>/dev/null | head -n 1)" ]; }
 
+# Applies LOKI_STORAGE to the history in file $1.
+switch_storage() {
+	# shellcheck disable=SC2046
+	set -- "$1" $(tail -n 1 "$1")
+	[ "$3" != "$LOKI_STORAGE" ] || return 0
+	if [ "$(wc -l <"$1")" -gt 1 ] && [ "$(echo "$2" | tr -d -)" -gt "$(date -u +%Y%m%d)" ]; then
+		sed -i '$d' "$1"
+		log "peralihan ke $3 mulai $2 dibatalkan"
+		return 0
+	fi
+	since="$(switch_date "$(date +%s)")"
+	echo "$since $LOKI_STORAGE" >>"$1"
+	log "log baru disimpan di $LOKI_STORAGE mulai $since 00:00 UTC; log sebelumnya tetap dibaca dari tempat lamanya"
+}
+
 render() {
-	since_file="$DATA/s3-since"
 	case "${LOKI_STORAGE:-}" in
-	filesystem)
-		if [ -f "$since_file" ]; then
-			log "peralihan ke S3 (mulai $(cat "$since_file")) dibatalkan; log yang sudah tersimpan di S3 tidak terbaca lagi"
-			rm "$since_file"
-		fi
-		periods="$(period 2024-01-01 filesystem)"
-		;;
-	s3)
-		if [ ! -f "$since_file" ] && has_local_logs; then
-			switch_date "$(date +%s)" >"$since_file.tmp"
-			mv "$since_file.tmp" "$since_file"
-		fi
-		if [ -f "$since_file" ]; then
-			since="$(cat "$since_file")"
-			log "log sebelum $since tetap di disk lokal sampai terhapus retensi; mulai $since 00:00 UTC log disimpan di S3"
-			periods="$(
-				period 2024-01-01 filesystem
-				period "$since" s3
-			)"
-		else
-			periods="$(period 2024-01-01 s3)"
-		fi
-		;;
+	filesystem | s3) ;;
 	*)
 		log "LOKI_STORAGE harus filesystem atau s3, bukan '${LOKI_STORAGE:-}'"
 		return 1
 		;;
 	esac
+	history="$DATA/storage-history"
+	plan="$(mktemp)"
+	if [ -f "$history" ]; then
+		if grep -qvE '^[0-9]{4}-[0-9]{2}-[0-9]{2} (filesystem|s3)$' "$history"; then
+			log "$history rusak: setiap baris harus 'YYYY-MM-DD filesystem' atau 'YYYY-MM-DD s3'"
+			return 1
+		fi
+		cp "$history" "$plan"
+	elif has_local_logs; then
+		echo "2024-01-01 filesystem" >"$plan"
+	else
+		echo "2024-01-01 $LOKI_STORAGE" >"$plan"
+	fi
+	switch_storage "$plan"
+	# Writing into a volume Loki has not populated yet would stop Docker from
+	# copying the image's /loki, and its owner, into it.
+	if [ -n "$(ls -A "$DATA")" ]; then
+		cp "$plan" "$history.tmp"
+		mv "$history.tmp" "$history"
+	fi
 	{
 		cat "$TEMPLATE"
-		printf '%s\n' "$periods"
+		while read -r from store; do period "$from" "$store"; done <"$plan"
 	} >"$OUT.tmp"
 	mv "$OUT.tmp" "$OUT"
+	rm "$plan"
 }
 
 [ -z "${PLG_LOKI_INIT_SOURCE_ONLY:-}" ] || return 0

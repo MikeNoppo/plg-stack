@@ -118,26 +118,27 @@ lewat retensi per jenis dan limit ingest; pantau ukurannya di dashboard
 
 ### Penyimpanan log
 
-`LOKI_STORAGE` menentukan tempat Loki menyimpan log:
+`LOKI_STORAGE` menentukan tempat Loki menyimpan log baru:
 
 - `filesystem` (default): volume `loki-data` di server stack; ikut backup.
 - `s3`: bucket S3 / S3-compatible (`LOKI_S3_*`); disk server tetap lega, dan
   log di bucket tidak ikut backup karena tidak tersimpan di server.
 
-Pindah dari `filesystem` ke `s3` cukup dengan mengubah `.env` (atau menjalankan
-ulang `setup.sh`) lalu deploy ulang. Tidak ada data yang disalin, dan log lama
-tetap terlihat di Grafana:
+Tempat penyimpanan bisa diganti kapan saja, ke arah mana pun: ubah `.env` (atau
+jalankan ulang `setup.sh`) lalu deploy ulang. Tidak ada data yang disalin, dan
+semua log tetap terlihat di Grafana:
 
-- Log yang sudah ada tetap dibaca dari disk lokal sampai terhapus retensi
-  (`LOKI_RETENTION`); setelah itu disk lokal kosong dengan sendirinya.
-- Log baru disimpan di S3 mulai pukul 00:00 UTC berikutnya, minimal satu jam
-  setelah deploy, karena Loki baru bisa berganti penyimpanan di awal hari.
-  Tanggal peralihannya tercatat di `/loki/s3-since` (volume `loki-data`) dan
-  ditampilkan `scripts/doctor.sh`.
-- Selama masa peralihan, log lama di disk lokal tidak ikut backup.
-
-Kembali dari `s3` ke `filesystem` tidak memindahkan log yang sudah ada di S3;
-log itu tidak terbaca lagi.
+- Loki membaca log setiap hari dari tempat yang dipakai pada hari itu. Setiap
+  pergantian dicatat di `/loki/storage-history` (volume `loki-data`) dan
+  catatan itu hanya pernah ditambah.
+- Tempat baru dipakai mulai pukul 00:00 UTC berikutnya, minimal satu jam
+  setelah deploy, karena Loki hanya bisa berganti penyimpanan di awal hari.
+  Mengganti balik sebelum waktu itu membatalkan pergantiannya.
+- Log lama terhapus retensi (`LOKI_RETENTION`) di tempatnya masing-masing.
+  Selama masih ada log di S3, `LOKI_S3_*` harus tetap terisi.
+- `scripts/doctor.sh` menampilkan tempat penyimpanan sekarang dan pergantian
+  yang dijadwalkan.
+- Selama masa peralihan ke S3, log lama di disk lokal tidak ikut backup.
 
 ## 2. Pasang agent di server yang dipantau
 

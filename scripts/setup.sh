@@ -177,13 +177,13 @@ set_value PROMETHEUS_OOO_WINDOW "$value"
 info "Penyimpanan log"
 echo "  filesystem : di volume Docker server ini (ikut dipindah lewat backup/restore)."
 echo "  s3         : di bucket S3 / S3-compatible (tidak perlu dipindah, disk lokal aman)."
-ask STORAGE "Pilih (filesystem/s3)" "$(old LOKI_STORAGE filesystem)" '^(filesystem|s3)$'
+old_storage="$(old LOKI_STORAGE)"
+ask STORAGE "Pilih (filesystem/s3)" "${old_storage:-filesystem}" '^(filesystem|s3)$'
 set_value LOKI_STORAGE "$STORAGE"
-if [[ "$STORAGE" == s3 && "$(old LOKI_STORAGE)" == filesystem ]]; then
-	note "Log yang sudah ada tetap terbaca dari disk lokal sampai terhapus retensi; log baru disimpan"
-	note "di S3 mulai pukul 00:00 UTC berikutnya (minimal satu jam setelah deploy)."
-elif [[ "$STORAGE" == filesystem && "$(old LOKI_STORAGE)" == s3 ]]; then
-	note "Log yang sudah tersimpan di S3 tidak terbaca lagi setelah kembali ke filesystem."
+if [[ -n "$old_storage" && "$STORAGE" != "$old_storage" ]]; then
+	note "Log yang sudah ada tetap terbaca dari tempat lamanya sampai terhapus retensi; log baru"
+	note "disimpan di $STORAGE mulai pukul 00:00 UTC berikutnya (minimal satu jam setelah deploy)."
+	[[ "$STORAGE" == s3 ]] || note "Biarkan LOKI_S3_* tetap terisi selama masih ada log di S3."
 fi
 if [[ "$STORAGE" == s3 ]]; then
 	ask value "Nama bucket" "$(old LOKI_S3_BUCKET)"

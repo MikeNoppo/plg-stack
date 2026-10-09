@@ -208,7 +208,7 @@ restic() { echo '[]'; }
 (restore 19990101-000000) 2>/dev/null
 assert_eq 1 "$?" "an unknown run fails"
 
-echo 2026-10-09 >"$loki/s3-since"
+printf "2024-01-01 filesystem\n2026-10-09 s3\n" >"$loki/storage-history"
 restic() {
 	printf '%s\n' "$*" >>"$WORK/restic.log"
 	case "$1" in
@@ -220,7 +220,7 @@ restic() {
 LOKI_STORAGE=s3
 (restore 20261008-020000) 2>"$WORK/stderr"
 LOKI_STORAGE=filesystem
-assert_eq 2026-10-09 "$(cat "$loki/s3-since")" "Loki's volume is left alone while Loki uses S3"
+assert_eq "2024-01-01 filesystem 2026-10-09 s3" "$(echo $(cat "$loki/storage-history"))" "Loki's volume is left alone while Loki uses S3"
 assert_fails "local logs are not restored over it" grep -q ",loki latest" "$WORK/restic.log"
 assert_contains "$(cat "$WORK/stderr")" "volume Loki tidak dipulihkan" "the skipped volume is explained"
 
