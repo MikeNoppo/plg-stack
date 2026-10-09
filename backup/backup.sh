@@ -223,13 +223,16 @@ write_metrics() {
 
 take_lock() {
 	exec 9>"$TMP/lock"
-	flock -n 9 || die "backup lain sedang berjalan"
+	flock -n 9 && return 0
+	[ "${1:-}" = wait ] || die "backup lain sedang berjalan"
+	log "menunggu backup atau copy lain selesai"
+	flock 9
 }
 
 run_backup() {
 	require_config
 	mkdir -p "$TMP"
-	take_lock
+	take_lock "${1:-}"
 	STARTED="$(date +%s)"
 	RUN="$(date +%Y%m%d-%H%M%S)"
 	: >"$TMP/sizes"
@@ -310,7 +313,8 @@ schedule() {
 	while :; do
 		now="$(date +%s)"
 		sleep $(($(next_run "$now" $times) - now))
-		(run_backup) || true
+		# Waits for a manual backup or a long copy instead of skipping the day.
+		(run_backup wait) || true
 	done
 }
 

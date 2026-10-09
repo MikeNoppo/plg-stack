@@ -221,7 +221,16 @@ flock -n 8
 (run_backup) 2>"$WORK/stderr"
 assert_eq 1 "$?" "a second run does not start while one is running"
 assert_contains "$(cat "$WORK/stderr")" "backup lain sedang berjalan" "the overlap is explained"
+# The background run must not inherit fd 8, which holds the lock.
+(exec 8>&-; run_backup wait) 2>"$WORK/stderr" &
+for _ in $(seq 50); do
+	grep -q menunggu "$WORK/stderr" && break
+	command sleep 0.1
+done
+assert_ok "a scheduled run waits instead of skipping the day" kill -0 $!
 exec 8>&-
+wait $!
+assert_eq 0 "$?" "and backs up once the other run is done"
 
 # --- restore --------------------------------------------------------------------
 
